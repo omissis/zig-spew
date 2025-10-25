@@ -1,5 +1,9 @@
 const std = @import("std");
 
+pub const DumpError = error{
+    UnsupportedType,
+};
+
 pub const DumpOptions = struct {
     indent_size: u32 = 4,
     indent_str: []const u8 = " ",
@@ -18,40 +22,66 @@ pub const DumpContext = struct {
 
 pub const Dumper = struct {
     allocator: std.mem.Allocator,
-    buffer: std.ArrayList(u8),
     opts: DumpOptions,
 
     pub fn init(allocator: std.mem.Allocator, opts: DumpOptions) Dumper {
-        const buffer = std.ArrayList(u8).init(allocator);
-
         return .{
             .allocator = allocator,
-            .buffer = buffer,
             .opts = opts,
         };
     }
 
-    pub fn deinit(self: *Dumper) void {
-        self.buffer.deinit();
-    }
+    // TODO: implement deinit?
 
     pub fn dump(self: *Dumper, comptime T: type, value: T, ctx: DumpContext) ![]const u8 {
         const type_of = @TypeOf(value);
+        const type_info = @typeInfo(type_of);
 
-        switch (@typeInfo(type_of)) {
-            .@"struct" => {
-                return try self.@"struct"(type_of, value, ctx);
+        switch (type_info) {
+            //.type
+            //.void
+            .bool => {
+                return try self.boolean(value, ctx);
             },
+            //.noreturn
             .int => {
                 return try self.int(type_of, value, ctx);
+            },
+            //.float
+            .pointer => {
+                const child_type_info = @typeInfo(type_info.pointer.child);
+
+                if (type_info.pointer.size == .slice and child_type_info.int.signedness == .unsigned and child_type_info.int.bits == 8) {
+                    return try self.string(type_of, value, ctx);
+                }
+
+                return DumpError.UnsupportedType;
             },
             .array => {
                 return try self.string(type_of, value, ctx);
             },
+            .@"struct" => {
+                return try self.@"struct"(type_of, value, ctx);
+            },
+            //.comptime_float
+            //.comptime_int
+            //.undefined
+            //.null
+            //.optional
+            //.error_union
+            //.error_set
+            //.@"enum"
+            //.@"union"
+            //.@"fn"
+            //.@"opaque"
+            //.frame
+            //.@"anyframe"
+            //.vector
+            //.enum_literal
             // TODO: types like Draft2020_12.Property are not supported, we need to do through a different path
             else => {
-                std.debug.print("Unsupported type: {s}\n", .{type_of});
-                return "not implemented";
+                std.debug.print("Unsupported type: {}\n", .{@typeInfo(type_of)});
+                return DumpError.UnsupportedType;
             },
         }
 
@@ -118,6 +148,14 @@ pub const Dumper = struct {
         try self.appendf("{s}}}\n", .{try self.indent(ctx)});
 
         return self.buffer.toOwnedSlice();
+    }
+
+    fn boolean(self: *Dumper, value: bool, _: DumpContext) ![]const u8 {
+        if (value) {
+            return try self.sprintf("true", .{});
+        }
+
+        return try self.sprintf("false", .{});
     }
 
     fn string(self: *Dumper, comptime T: type, value: T, _: DumpContext) ![]const u8 {
