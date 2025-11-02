@@ -1,20 +1,19 @@
 const std = @import("std");
+const lang = @import("lang.zig");
 const theme = @import("theme.zig");
 
 pub const Dumper = struct {
     allocator: std.mem.Allocator,
-    theme_renderer: theme.Renderer,
     options: DumpOptions,
 
     pub fn init(allocator: std.mem.Allocator, options: DumpOptions) Dumper {
         return .{
             .allocator = allocator,
-            .theme_renderer = theme.Renderer.init(allocator, options.rendering),
             .options = options,
         };
     }
 
-    pub fn print(self: *Dumper, value: anytype, ctx: theme.RenderContext) !void {
+    pub fn print(self: *Dumper, value: anytype, ctx: DumpContext) !void {
         const out = try self.dump(value, ctx);
 
         try std.fs.File.stdout().writeAll(out);
@@ -23,9 +22,9 @@ pub const Dumper = struct {
 
     // TODO: implement deinit?
 
-    pub fn dump(self: *Dumper, value: anytype, ctx: theme.RenderContext) ![]const u8 {
-        const opts = if (ctx.options == null) self.options.rendering else ctx.options.?;
-        const child_ctx = ctx.incDepth();
+    pub fn dump(self: *Dumper, value: anytype, context: DumpContext) ![]const u8 {
+        const ctx = context.incDepth();
+        const opts = if (ctx.options == null) self.options else ctx.options.?;
         const type_of = @TypeOf(value);
         const type_info = @typeInfo(type_of);
 
@@ -35,54 +34,39 @@ pub const Dumper = struct {
 
         switch (type_info) {
             .bool => {
-                return try self.theme_renderer.formatBoolean(value, child_ctx);
+                return try self.formatBoolean(value, ctx);
             },
             .int => {
                 if (opts.bytes_interpretation) {
                     if (type_info.int.signedness == .unsigned and type_info.int.bits == 8) {
-                        return try self.theme_renderer.formatByte(value, child_ctx);
+                        return try self.formatByte(value, ctx);
                     }
                 }
 
-                return try self.theme_renderer.formatInt(value, child_ctx);
+                return try self.formatInt(value, ctx);
             },
             .comptime_int => {
-                return try self.theme_renderer.formatInt(value, child_ctx);
+                return try self.formatInt(value, ctx);
             },
             .float, .comptime_float => {
-                return try self.theme_renderer.formatFloat(value, child_ctx);
+                return try self.formatFloat(value, ctx);
             },
             .null => {
-                return try self.theme_renderer.formatNull(child_ctx);
+                return try self.formatNull(ctx);
             },
             .undefined => {
-                return try self.theme_renderer.formatUndefined(child_ctx);
+                return try self.formatUndefined(ctx);
             },
             .array => {
-                var w = std.Io.Writer.Allocating.init(self.allocator);
-
-                _ = try w.writer.write("[");
-
-                for (value, 0..) |item, i| {
-                    _ = try w.writer.write(try self.dump(item, child_ctx));
-
-                    if (i != value.len - 1) {
-                        _ = try w.writer.write(", ");
-                    }
-                }
-
-                _ = try w.writer.write("]");
-
-                return try w.toOwnedSlice();
+                return try self.formatList(value, ctx);
             },
             .optional => {
                 if (value == null) {
-                    return try self.theme_renderer.formatNull(child_ctx);
+                    return try self.formatNull(ctx);
                 }
 
-                return try self.dump(value.?, child_ctx);
+                return try self.dump(value.?, ctx);
             },
-            // TODO
             .pointer => {
                 const child_type_info = @typeInfo(type_info.pointer.child);
 
@@ -96,31 +80,33 @@ pub const Dumper = struct {
                                 switch (child_type_info.array.child) {
                                     u8 => {
                                         if (opts.string_interpretation) {
-                                            return try self.theme_renderer.formatString(value, child_ctx);
+                                            return try self.formatString(value, ctx);
                                         }
-
-                                        return try self.dump(value.*, child_ctx);
                                     },
-                                    else => {
-                                        std.debug.print("TODO");
-                                    },
+                                    else => {},
                                 }
                             },
-                            else => {
-                                std.debug.print("TODO");
-                            },
+                            else => {},
                         }
-                    },
-                    else => {
-                        std.debug.print("TODO");
-                    },
-                }
 
-                if (type_info.pointer.size == .slice and child_type_info.int.signedness == .unsigned and child_type_info.int.bits == 8) {
-                    return try self.string(type_of, value, child_ctx);
-                }
+                        return try self.dump(value.*, ctx);
+                    },
+                    .slice => {
+                        switch (child_type_info) {
+                            .int => {
+                                if (child_type_info.int.signedness == .unsigned and child_type_info.int.bits == 8) {
+                                    if (opts.string_interpretation) {
+                                        return try self.formatString(value, ctx);
+                                    }
+                                }
+                            },
+                            else => {},
+                        }
 
-                return "";
+                        return try self.formatList(value, ctx);
+                    },
+                    else => {},
+                }
             },
             // .@"struct" => {
             //     return try self.@"struct"(type_of, value, ctx);
@@ -138,145 +124,123 @@ pub const Dumper = struct {
             //.@"anyframe"
             //.vector
             //.enum_literal
-            else => {
-                std.debug.print("Unsupported type: {}\n", .{@typeInfo(type_of)});
-                return DumpError.UnsupportedType;
-            },
+            else => {},
         }
 
-        return try self.buffer.toOwnedSlice();
+        std.debug.print("Value {any} has unsupported type: {any}\n", .{ value, type_of });
+        std.debug.print("Type Info: {any}\n", .{type_info});
+
+        return "unsupported";
     }
 
-    fn @"struct"(self: *Dumper, comptime T: type, value: T, ctx: theme.RenderContext) ![]const u8 {
-        if (ctx.cur_depth >= self.options.max_depth) {
-            std.debug.print("Max depth({d}) reached, skipping dump.\n", .{self.options.max_depth});
+    fn formatString(self: *Dumper, val: anytype, ctx: DumpContext) ![]u8 {
+        const opts = if (ctx.options == null) self.options else ctx.options.?;
+        const str_val = if (@typeInfo(@TypeOf(val)).pointer.is_const) lang.String{
+            .ZeroTerminatedStringSlice = "\"" ++ val ++ "\"",
+        } else lang.String{
+            .MutableSliceOfBytes = try std.fmt.allocPrint(self.allocator, "\"{s}\"", .{val}),
+        };
 
-            return "";
-        }
+        return try opts.palette.strings.format(self.allocator, str_val);
+    }
 
-        const type_of = @TypeOf(value);
-        const type_info = @typeInfo(type_of);
-        const fields = type_info.@"struct".fields;
+    fn formatByte(self: *Dumper, val: anytype, ctx: DumpContext) ![]u8 {
+        const opts = if (ctx.options == null) self.options else ctx.options.?;
+        const bytes = switch (opts.bytes_representation) {
+            theme.BytesRepresentation.hex => try std.fmt.allocPrint(self.allocator, "0x{x}", .{val}),
+            theme.BytesRepresentation.dec => try std.fmt.allocPrint(self.allocator, "{d}", .{val}),
+        };
+        const str_val = lang.String{ .MutableSliceOfBytes = bytes };
 
-        // determine the length required for the field names, so to align the output
-        comptime var alignment: u32 = 0;
+        return try opts.palette.bytes.format(self.allocator, str_val);
+    }
 
-        inline for (fields) |field| {
-            if (field.name.len > alignment) {
-                alignment = field.name.len + 1;
+    fn formatInt(self: *Dumper, val: anytype, ctx: DumpContext) ![]u8 {
+        const opts = if (ctx.options == null) self.options else ctx.options.?;
+        const str_val = lang.String{
+            .MutableSliceOfBytes = try std.fmt.allocPrint(self.allocator, "{d}", .{val}),
+        };
+
+        return try opts.palette.numbers.format(self.allocator, str_val);
+    }
+
+    fn formatFloat(self: *Dumper, val: anytype, ctx: DumpContext) ![]u8 {
+        const opts = if (ctx.options == null) self.options else ctx.options.?;
+        const str_val = lang.String{
+            .MutableSliceOfBytes = try std.fmt.allocPrint(self.allocator, "{d}", .{val}),
+        };
+
+        return try opts.palette.numbers.format(self.allocator, str_val);
+    }
+
+    fn formatBoolean(self: *Dumper, val: anytype, ctx: DumpContext) ![]u8 {
+        const opts = if (ctx.options == null) self.options else ctx.options.?;
+        const str_val = lang.String{ .ZeroTerminatedStringSlice = if (val) "true" else "false" };
+
+        return try opts.palette.booleans.format(self.allocator, str_val);
+    }
+
+    fn formatNull(self: *Dumper, ctx: DumpContext) ![]u8 {
+        const opts = if (ctx.options == null) self.options else ctx.options.?;
+        const str_val = lang.String{ .ZeroTerminatedStringSlice = "null" };
+
+        return try opts.palette.empties.format(self.allocator, str_val);
+    }
+
+    fn formatUndefined(self: *Dumper, ctx: DumpContext) ![]u8 {
+        const opts = if (ctx.options == null) self.options else ctx.options.?;
+        const str_val = lang.String{ .ZeroTerminatedStringSlice = "undefined" };
+
+        return try opts.palette.empties.format(self.allocator, str_val);
+    }
+
+    fn formatBrackets(self: *Dumper, val: anytype, ctx: DumpContext) ![]u8 {
+        const opts = if (ctx.options == null) self.options else ctx.options.?;
+
+        const str_val = lang.String{ .ZeroTerminatedStringSlice = val };
+
+        return try opts.palette.brackets.format(self.allocator, str_val);
+    }
+
+    fn formatList(self: *Dumper, val: anytype, ctx: DumpContext) ![]u8 {
+        var w = std.Io.Writer.Allocating.init(self.allocator);
+
+        _ = try w.writer.write(try self.formatBrackets("[", ctx));
+
+        for (val, 0..) |item, i| {
+            _ = try w.writer.write(try self.dump(item, ctx));
+
+            if (i != val.len - 1) {
+                _ = try w.writer.write(", ");
             }
         }
 
-        try self.appendf("{s}{s} {{\n", .{ try self.indent(ctx), @typeName(type_of) });
+        _ = try w.writer.write(try self.formatBrackets("]", ctx));
 
-        const field_format = std.fmt.comptimePrint("{{s}}{{s:<{d}}}: {{s}}\n", .{alignment});
-        const field_indent = try self.indent(ctx.incDepth());
-        defer self.allocator.free(field_indent);
-
-        inline for (fields) |field| {
-            const field_value = @field(value, field.name);
-            const field_type_name = @typeName(field.type);
-
-            if (std.mem.indexOf(u8, field_type_name, "ArrayList") != null) {
-                const v = try self.arrayList(field.type, field_value, ctx.incDepth());
-                defer self.allocator.free(v);
-
-                try self.appendf(field_format, .{ field_indent, field.name, v });
-            } else if (std.mem.indexOf(u8, field_type_name, "ArrayHashMap") != null) {
-                const v = try self.arrayHashMap(field.type, field_value, ctx.incDepth());
-                defer self.allocator.free(v);
-
-                try self.appendf(field_format, .{ field_indent, field.name, v });
-            } else {
-                switch (field.type) {
-                    []u8, []const u8 => {
-                        const v = try self.string(field.type, field_value, ctx);
-                        defer self.allocator.free(v);
-
-                        try self.appendf(field_format, .{ field_indent, field.name, v });
-                    },
-                    else => {
-                        const v = "unsupported";
-
-                        try self.appendf(field_format, .{ field_indent, field.name, v });
-                    },
-                }
-            }
-        }
-
-        try self.appendf("{s}}}\n", .{try self.indent(ctx)});
-
-        return self.buffer.toOwnedSlice();
+        return try w.toOwnedSlice();
     }
-
-    fn string(self: *Dumper, comptime T: type, value: T, _: theme.RenderContext) ![]const u8 {
-        return try self.sprintf("\"{s}\"", .{value});
-    }
-
-    fn arrayList(self: *Dumper, comptime T: type, _: T, _: theme.RenderContext) ![]const u8 {
-        return try self.sprintf("{s}", .{"ARRAY_LIST"}); // TODO: print value
-    }
-
-    fn arrayHashMap(self: *Dumper, comptime T: type, value: T, ctx: theme.RenderContext) ![]const u8 {
-        var str = std.ArrayList(u8).init(self.allocator);
-        defer str.deinit();
-
-        try str.writer().print("[\n", .{});
-
-        const info = @typeInfo(T);
-        if (info != .@"struct") return error.UnsupportedType;
-
-        var it = value.iterator();
-        while (it.next()) |entry| {
-            const key = entry.key_ptr.*;
-            const val = try self.dump(@TypeOf(entry.value_ptr.*), entry.value_ptr.*, ctx.incDepth());
-
-            try str.writer().print("{s}{s}: {s}\n", .{ try self.indent(ctx.incDepth()), key, val });
-        }
-
-        // var it = value.iterator();
-
-        // while (it.next()) |entry| {
-        //     std.debug.print("key: {s}, value: {s}\n", .{ entry.key, entry.value });
-        // }
-
-        try str.writer().print("{s}]\n", .{try self.indent(ctx)});
-
-        return str.toOwnedSlice();
-    }
-
-    fn indent(self: *Dumper, ctx: theme.RenderContext) ![]u8 {
-        if (ctx.cur_depth == 0) {
-            return &.{};
-        }
-
-        if (self.options.indent_size <= 0) {
-            return &.{};
-        }
-
-        const buf = try self.allocator.alloc(u8, self.options.indent_size * ctx.cur_depth);
-
-        @memset(buf, self.options.indent_str[0]);
-
-        return buf;
-    }
-
-    fn sprintf(self: *Dumper, comptime fmt: []const u8, args: anytype) ![]u8 {
-        return try std.fmt.allocPrint(self.allocator, fmt, args);
-    }
-
-    fn appendf(self: *Dumper, comptime fmt: []const u8, args: anytype) !void {
-        try self.buffer.writer().print(fmt, args);
-    }
-};
-
-pub const DumpError = error{
-    UnsupportedType,
 };
 
 pub const DumpOptions = struct {
     indent_size: u32 = 4,
-    indent_str: []const u8 = " ",
+    indent_ch: u8 = ' ',
     max_depth: u32 = 10,
-    rendering: theme.RenderOptions = .{},
+    palette: theme.Palette = theme.DefaultPalette,
+    decimal_places: u6 = 3,
+    decimal_min_width: u6 = 0,
+    hex_padding: u6 = 0,
+    string_interpretation: bool = true, // whether to interpret arrays and slices of u8 as strings
+    bytes_interpretation: bool = true, // whether to interpret u8 as bytes instead of decimals
+    bytes_representation: theme.BytesRepresentation = .hex, // wheter to represent bytes as decimals or hexadecimals
+};
+
+pub const DumpContext = struct {
+    cur_depth: u32 = 0,
+    options: ?DumpOptions = null,
+
+    pub fn incDepth(self: DumpContext) DumpContext {
+        return DumpContext{
+            .cur_depth = self.cur_depth + 1,
+        };
+    }
 };

@@ -1,14 +1,5 @@
 const std = @import("std");
-
-const StringType = enum {
-    MutableSliceOfBytes,
-    ZeroTerminatedStringSlice,
-};
-
-const String = union(StringType) {
-    MutableSliceOfBytes: []u8,
-    ZeroTerminatedStringSlice: [:0]const u8,
-};
+const lang = @import("lang.zig");
 
 const ColorFormat = enum { none, basic, extended, rgb };
 
@@ -18,7 +9,7 @@ const Color = union(ColorFormat) {
     extended: ExtendedColor,
     rgb: RgbColor,
 
-    fn format(self: Color, allocator: std.mem.Allocator, val: String) ![]u8 {
+    pub fn format(self: Color, allocator: std.mem.Allocator, val: lang.String) ![]u8 {
         const inner_value = switch (val) {
             .MutableSliceOfBytes => val.MutableSliceOfBytes,
             .ZeroTerminatedStringSlice => val.ZeroTerminatedStringSlice,
@@ -106,97 +97,7 @@ const RgbColor = struct {
     blue: u8,
 };
 
-pub const Renderer = struct {
-    allocator: std.mem.Allocator,
-    options: RenderOptions,
-
-    pub fn init(allocator: std.mem.Allocator, options: RenderOptions) Renderer {
-        return .{
-            .allocator = allocator,
-            .options = options,
-        };
-    }
-
-    pub fn formatString(self: *Renderer, val: anytype, ctx: RenderContext) ![]u8 {
-        const opts = if (ctx.options == null) self.options else ctx.options.?;
-        const str_val = String{ .ZeroTerminatedStringSlice = "\"" ++ val ++ "\"" };
-
-        return try opts.palette.strings.format(self.allocator, str_val);
-    }
-
-    pub fn formatByte(self: *Renderer, val: anytype, ctx: RenderContext) ![]u8 {
-        const opts = if (ctx.options == null) self.options else ctx.options.?;
-        const bytes = switch (opts.bytes_representation) {
-            BytesRepresentation.hex => try std.fmt.allocPrint(self.allocator, "0x{x}", .{val}),
-            BytesRepresentation.dec => try std.fmt.allocPrint(self.allocator, "{d}", .{val}),
-        };
-        const str_val = String{ .MutableSliceOfBytes = bytes };
-
-        return try opts.palette.bytes.format(self.allocator, str_val);
-    }
-
-    pub fn formatInt(self: *Renderer, val: anytype, ctx: RenderContext) ![]u8 {
-        const opts = if (ctx.options == null) self.options else ctx.options.?;
-        const str_val = String{
-            .MutableSliceOfBytes = try std.fmt.allocPrint(self.allocator, "{d}", .{val}),
-        };
-
-        return try opts.palette.numbers.format(self.allocator, str_val);
-    }
-
-    pub fn formatFloat(self: *Renderer, val: anytype, ctx: RenderContext) ![]u8 {
-        const opts = if (ctx.options == null) self.options else ctx.options.?;
-        const str_val = String{
-            .MutableSliceOfBytes = try std.fmt.allocPrint(self.allocator, "{d}", .{val}),
-        };
-
-        return try opts.palette.numbers.format(self.allocator, str_val);
-    }
-
-    pub fn formatBoolean(self: *Renderer, val: anytype, ctx: RenderContext) ![]u8 {
-        const opts = if (ctx.options == null) self.options else ctx.options.?;
-        const str_val = String{ .ZeroTerminatedStringSlice = if (val) "true" else "false" };
-
-        return try opts.palette.booleans.format(self.allocator, str_val);
-    }
-
-    pub fn formatNull(self: *Renderer, ctx: RenderContext) ![]u8 {
-        const opts = if (ctx.options == null) self.options else ctx.options.?;
-        const str_val = String{ .ZeroTerminatedStringSlice = "null" };
-
-        return try opts.palette.empties.format(self.allocator, str_val);
-    }
-
-    pub fn formatUndefined(self: *Renderer, ctx: RenderContext) ![]u8 {
-        const opts = if (ctx.options == null) self.options else ctx.options.?;
-        const str_val = String{ .ZeroTerminatedStringSlice = "undefined" };
-
-        return try opts.palette.empties.format(self.allocator, str_val);
-    }
-};
-
-pub const RenderOptions = struct {
-    palette: Palette = DefaultPalette,
-    decimal_places: u6 = 3,
-    decimal_min_width: u6 = 0,
-    hex_padding: u6 = 0,
-    string_interpretation: bool = true, // whether to interpret arrays and slices of u8 as strings
-    bytes_interpretation: bool = true, // whether to interpret u8 as bytes instead of decimals
-    bytes_representation: BytesRepresentation = .hex, // wheter to represent bytes as decimals or hexadecimals
-};
-
-const BytesRepresentation = enum { hex, dec };
-
-pub const RenderContext = struct {
-    cur_depth: u32 = 0,
-    options: ?RenderOptions = null,
-
-    pub fn incDepth(self: RenderContext) RenderContext {
-        return RenderContext{
-            .cur_depth = self.cur_depth + 1,
-        };
-    }
-};
+pub const BytesRepresentation = enum { hex, dec };
 
 pub const Palette = struct {
     booleans: Color,
@@ -204,7 +105,7 @@ pub const Palette = struct {
     strings: Color,
     bytes: Color,
     empties: Color,
-    keywords: Color,
+    brackets: Color,
 };
 
 pub const DefaultPalette = Palette{
@@ -213,7 +114,7 @@ pub const DefaultPalette = Palette{
     .strings = Color{ .basic = BasicColor.BlueForeground },
     .bytes = Color{ .basic = BasicColor.GreenForeground },
     .empties = Color{ .basic = BasicColor.BrightBlueForeground },
-    .keywords = Color{ .basic = BasicColor.MagentaForeground },
+    .brackets = Color{ .basic = BasicColor.MagentaForeground },
 };
 
 pub const MonochromaticPalette = Palette{
@@ -222,5 +123,5 @@ pub const MonochromaticPalette = Palette{
     .strings = Color{ .none = NoColor{} },
     .bytes = Color{ .none = NoColor{} },
     .empties = Color{ .none = NoColor{} },
-    .keywords = Color{ .none = NoColor{} },
+    .brackets = Color{ .none = NoColor{} },
 };
