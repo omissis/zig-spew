@@ -89,4 +89,28 @@ pub fn main() !void {
     chars_slice[3] = 'o';
     chars_slice[4] = '\n';
     try d.print(chars_slice, .{});
+
+    const Currency = struct {
+        Name: []const u8,
+        Symbol: []const u8,
+    };
+    const Money = struct {
+        Amount: u32,
+        Currency: Currency,
+    };
+    const m = Money{
+        .Amount = 1000,
+        .Currency = .{
+            .Name = "Euro",
+            .Symbol = "€",
+        },
+    };
+
+    try d.print(m, .{
+        .options = .{
+            .structs_pretty_print = false,
+        },
+    });
+
+    try d.print(m, .{});
 }

@@ -20,10 +20,7 @@ pub const Dumper = struct {
         try std.fs.File.stdout().writeAll("\n");
     }
 
-    // TODO: implement deinit?
-
-    pub fn dump(self: *Dumper, value: anytype, context: DumpContext) ![]const u8 {
-        const ctx = context.incDepth();
+    pub fn dump(self: *Dumper, value: anytype, ctx: DumpContext) ![]const u8 {
         const opts = if (ctx.options == null) self.options else ctx.options.?;
         const type_of = @TypeOf(value);
         const type_info = @typeInfo(type_of);
@@ -65,7 +62,7 @@ pub const Dumper = struct {
                     return try self.formatNull(ctx);
                 }
 
-                return try self.dump(value.?, ctx);
+                return try self.dump(value.?, ctx.incDepth());
             },
             .pointer => {
                 const child_type_info = @typeInfo(type_info.pointer.child);
@@ -89,7 +86,7 @@ pub const Dumper = struct {
                             else => {},
                         }
 
-                        return try self.dump(value.*, ctx);
+                        return try self.dump(value.*, ctx.incDepth());
                     },
                     .slice => {
                         switch (child_type_info) {
@@ -108,9 +105,9 @@ pub const Dumper = struct {
                     else => {},
                 }
             },
-            // .@"struct" => {
-            //     return try self.@"struct"(type_of, value, ctx);
-            // },
+            .@"struct" => {
+                return try self.formatStruct(value, ctx);
+            },
             //.type
             //.void
             //.noreturn
@@ -135,9 +132,13 @@ pub const Dumper = struct {
 
     fn formatString(self: *Dumper, val: anytype, ctx: DumpContext) ![]u8 {
         const opts = if (ctx.options == null) self.options else ctx.options.?;
-        const str_val = if (@typeInfo(@TypeOf(val)).pointer.is_const) lang.String{
-            .ZeroTerminatedStringSlice = "\"" ++ val ++ "\"",
-        } else lang.String{
+        // TODO: find if there's a way to tell if a value is known at comptime
+        // const str_val = if (@typeInfo(@TypeOf(val)).pointer.is_const) lang.String{
+        //     .ZeroTerminatedStringSlice = "\"" ++ val ++ "\"",
+        // } else lang.String{
+        //     .MutableSliceOfBytes = try std.fmt.allocPrint(self.allocator, "\"{s}\"", .{val}),
+        // };
+        const str_val = lang.String{
             .MutableSliceOfBytes = try std.fmt.allocPrint(self.allocator, "\"{s}\"", .{val}),
         };
 
@@ -204,11 +205,12 @@ pub const Dumper = struct {
 
     fn formatList(self: *Dumper, val: anytype, ctx: DumpContext) ![]u8 {
         var w = std.Io.Writer.Allocating.init(self.allocator);
+        defer w.deinit();
 
         _ = try w.writer.write(try self.formatBrackets("[", ctx));
 
         for (val, 0..) |item, i| {
-            _ = try w.writer.write(try self.dump(item, ctx));
+            _ = try w.writer.write(try self.dump(item, ctx.incDepth()));
 
             if (i != val.len - 1) {
                 _ = try w.writer.write(", ");
@@ -218,6 +220,80 @@ pub const Dumper = struct {
         _ = try w.writer.write(try self.formatBrackets("]", ctx));
 
         return try w.toOwnedSlice();
+    }
+
+    fn formatStruct(self: *Dumper, val: anytype, ctx: DumpContext) ![]u8 {
+        const opts = if (ctx.options == null) self.options else ctx.options.?;
+
+        var w = std.Io.Writer.Allocating.init(self.allocator);
+        defer w.deinit();
+
+        if (ctx.cur_depth >= opts.max_depth) {
+            std.debug.print("Max depth({d}) reached, skipping dump.\n", .{opts.max_depth});
+
+            _ = try w.writer.write("{...}");
+
+            return w.toOwnedSlice();
+        }
+
+        const type_of = @TypeOf(val);
+        const type_info = @typeInfo(type_of);
+        const fields = type_info.@"struct".fields;
+
+        // determine the length required for the field names, so to align the output
+        var alignment: u32 = 0;
+
+        if (opts.structs_pretty_print) {
+            inline for (fields) |field| {
+                if (field.name.len > alignment) {
+                    alignment = field.name.len + 1;
+                }
+            }
+        }
+
+        const eol = if (opts.structs_pretty_print) "\n" else " ";
+
+        _ = try w.writer.print("{s} {{{s}", .{ @typeName(type_of), eol });
+
+        const field_format = "{s}{s}: {s}{s}{s}";
+        const field_indent = try self.indent(ctx.cur_depth + 1, opts.structs_pretty_print);
+        defer self.allocator.free(field_indent);
+
+        inline for (fields, 0..) |field, i| {
+            const field_value = @field(val, field.name);
+            const sep = if (i < fields.len - 1) "," else "";
+
+            _ = try w.writer.print(
+                field_format,
+                .{ field_indent, field.name, try self.dump(field_value, ctx.incDepth()), sep, eol },
+            );
+        }
+
+        _ = try w.writer.print("{s}}}", .{try self.indent(ctx.cur_depth, opts.structs_pretty_print)});
+
+        return try w.toOwnedSlice();
+    }
+
+    fn indent(self: *Dumper, depth: u16, pretty: bool) ![]u8 {
+        if (depth == 0) {
+            return &.{};
+        }
+
+        if (self.options.indent_size <= 0) {
+            return &.{};
+        }
+
+        if (!pretty) {
+            return &.{};
+        }
+
+        const size = self.options.indent_size * depth;
+
+        const buf = try self.allocator.alloc(u8, size);
+
+        @memset(buf, self.options.indent_ch);
+
+        return buf;
     }
 };
 
@@ -232,15 +308,18 @@ pub const DumpOptions = struct {
     string_interpretation: bool = true, // whether to interpret arrays and slices of u8 as strings
     bytes_interpretation: bool = true, // whether to interpret u8 as bytes instead of decimals
     bytes_representation: theme.BytesRepresentation = .hex, // wheter to represent bytes as decimals or hexadecimals
+    structs_pretty_print: bool = true,
 };
 
 pub const DumpContext = struct {
-    cur_depth: u32 = 0,
+    cur_depth: u16 = 0,
     options: ?DumpOptions = null,
 
     pub fn incDepth(self: DumpContext) DumpContext {
-        return DumpContext{
-            .cur_depth = self.cur_depth + 1,
-        };
+        var new = self;
+
+        new.cur_depth += 1;
+
+        return new;
     }
 };
