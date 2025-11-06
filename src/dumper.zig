@@ -226,6 +226,7 @@ pub const Dumper = struct {
     fn formatStruct(self: *Dumper, writer: *std.Io.Writer, val: anytype, ctx: DumpContext) !void {
         const opts = if (ctx.options == null) self.options else ctx.options.?;
 
+        // check if we reached maximum depth and if so, give up.
         if (ctx.cur_depth >= opts.max_depth) {
             std.debug.print("Max depth({d}) reached, skipping dump.\n", .{opts.max_depth});
 
@@ -234,13 +235,13 @@ pub const Dumper = struct {
             return;
         }
 
+        // extract value's type metadata.
         const type_of = @TypeOf(val);
         const type_info = @typeInfo(type_of);
         const fields = type_info.@"struct".fields;
 
         // determine the length required for the field names, so to align the output
         var alignment: u32 = 0;
-
         if (opts.structs_pretty_print) {
             inline for (fields) |field| {
                 if (field.name.len > alignment) {
@@ -249,39 +250,43 @@ pub const Dumper = struct {
             }
         }
 
+        // determine end-of-line character
         const eol = if (opts.structs_pretty_print) "\n" else " ";
 
+        // print them all!
         _ = try writer.print("{s} {{{s}", .{ @typeName(type_of), eol });
-
-        const field_indent = try self.indent(ctx.cur_depth + 1, opts.structs_pretty_print);
 
         inline for (fields, 0..) |field, i| {
             const field_value = @field(val, field.name);
             const sep = if (i < fields.len - 1) "," else "";
 
-            _ = try writer.print("{s}{s}: ", .{ field_indent, field.name });
+            try self.indent(writer, ctx.cur_depth + 1, opts.structs_pretty_print);
 
-            try self.write(writer, field_value, ctx.incDepth());
+            _ = try writer.print("{s}: ", .{field.name});
+
+            _ = try self.write(writer, field_value, ctx.incDepth());
 
             _ = try writer.print("{s}{s}", .{ sep, eol });
         }
 
-        _ = try writer.print("{s}}}", .{try self.indent(ctx.cur_depth, opts.structs_pretty_print)});
+        try self.indent(writer, ctx.cur_depth, opts.structs_pretty_print);
+
+        _ = try writer.print("}}", .{});
 
         return;
     }
 
-    fn indent(self: *Dumper, depth: u16, pretty: bool) ![]u8 {
+    fn indent(self: *Dumper, writer: *std.Io.Writer, depth: u16, pretty: bool) !void {
         if (depth == 0) {
-            return "";
+            return;
         }
 
         if (self.options.indent_size <= 0) {
-            return "";
+            return;
         }
 
         if (!pretty) {
-            return "";
+            return;
         }
 
         const size = self.options.indent_size * depth;
@@ -290,7 +295,9 @@ pub const Dumper = struct {
 
         @memset(buf, self.options.indent_ch);
 
-        return buf;
+        _ = try writer.write(buf);
+
+        return;
     }
 };
 
