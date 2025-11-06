@@ -300,13 +300,7 @@ pub const Dumper = struct {
             return;
         }
 
-        const size = self.options.indent_size * depth;
-
-        const buf = try self.allocator.alloc(u8, size);
-
-        @memset(buf, self.options.indent_ch);
-
-        _ = try writer.write(buf);
+        _ = try writer.splatByte(self.options.indent_ch, self.options.indent_size * depth);
 
         return;
     }
