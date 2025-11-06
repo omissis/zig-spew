@@ -111,6 +111,7 @@ pub const Dumper = struct {
             .@"struct" => {
                 return self.formatStruct(writer, value, ctx);
             },
+            // TODO: implement all the following types
             //.type
             //.void
             //.noreturn
@@ -132,15 +133,6 @@ pub const Dumper = struct {
 
         return;
     }
-
-    // pub fn format(
-    //     self: *Dumper,
-    //     comptime fmt: []const u8,
-    //     options: std.fmt.FormatOptions,
-    //     writer: anytype,
-    // ) !void {
-    //     const out = try self.write(value, writer);
-    // }
 
     fn formatString(self: *Dumper, writer: *std.Io.Writer, val: anytype, ctx: DumpContext) !void {
         const opts = if (ctx.options == null) self.options else ctx.options.?;
