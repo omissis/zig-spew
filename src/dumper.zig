@@ -2,6 +2,17 @@ const std = @import("std");
 const lang = @import("lang.zig");
 const theme = @import("theme.zig");
 
+// dump is a convenience function to be used only for debugging purposes: do not use it in production,
+// as it creates and destroy the whole allocator and dumper every time you call it.
+pub fn dump(value: anytype) !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    var d = Dumper.init(arena.allocator(), DumpOptions{});
+
+    try d.print(value, .{});
+}
+
 pub const Dumper = struct {
     allocator: std.mem.Allocator,
     options: DumpOptions,
