@@ -9,7 +9,7 @@ const Color = union(ColorFormat) {
     extended: ExtendedColor,
     rgb: RgbColor,
 
-    pub fn format(self: Color, allocator: std.mem.Allocator, val: lang.String) ![]u8 {
+    pub fn format(self: Color, writer: *std.Io.Writer, val: lang.String) !void {
         const inner_value = switch (val) {
             .MutableSliceOfBytes => val.MutableSliceOfBytes,
             .ZeroTerminatedStringSlice => val.ZeroTerminatedStringSlice,
@@ -17,29 +17,25 @@ const Color = union(ColorFormat) {
 
         return switch (self) {
             Color.none => {
-                return try std.fmt.allocPrint(
-                    allocator,
+                return try writer.print(
                     "{s}",
                     .{inner_value},
                 );
             },
             Color.basic => |c| {
-                return try std.fmt.allocPrint(
-                    allocator,
+                return try writer.print(
                     "\x1b[{d}m{s}\x1b[0m",
                     .{ @intFromEnum(c), inner_value },
                 );
             },
             Color.extended => |c| {
-                return try std.fmt.allocPrint(
-                    allocator,
+                return try writer.print(
                     "\x1b[38;5;{d}m{s}\x1b[0m",
                     .{ c, inner_value },
                 );
             },
             Color.rgb => |c| {
-                return try std.fmt.allocPrint(
-                    allocator,
+                return try writer.print(
                     "\x1b[38;2;{d};{d};{d}m{s}\x1b[0m",
                     .{ c.red, c.green, c.blue, inner_value },
                 );
