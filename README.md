@@ -38,5 +38,7 @@ pub fn main() !void {
     };
 
     try d.print(m);
+
+    try spew.dump(m);
 }
 ```

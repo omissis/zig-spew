@@ -5,7 +5,9 @@ const theme = @import("theme.zig");
 // dump is a convenience function to be used only for debugging purposes: do not use it in production,
 // as it creates and destroy the whole dumper every time you call it.
 pub fn dump(value: anytype) !void {
-    return Dumper.print(value);
+    const d = Dumper{};
+
+    return d.print(value);
 }
 
 pub const Dumper = struct {
@@ -19,6 +21,18 @@ pub const Dumper = struct {
         try writer.interface.writeAll("\n");
 
         try writer.interface.flush();
+    }
+
+    pub fn format(self: *const Dumper, allocator: std.mem.Allocator, value: anytype) ![]u8 {
+        var allocating = std.Io.Writer.Allocating.init(allocator);
+        defer allocating.deinit();
+
+        const writer = &allocating.writer;
+
+        try self.write(writer, value, .{});
+        try writer.flush();
+
+        return allocating.toOwnedSlice();
     }
 
     pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: DumpContext) !void {
