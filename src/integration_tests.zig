@@ -1,5 +1,5 @@
 const std = @import("std");
-const spew = @import("root.zig");
+const spew = @import("spew");
 
 test "dump bool" {
     const dumper, var arena = setup();
