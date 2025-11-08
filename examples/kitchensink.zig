@@ -1,5 +1,5 @@
 const std = @import("std");
-const spew = @import("spew.zig");
+const spew = @import("spew");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -107,7 +107,7 @@ pub fn main() !void {
         },
     };
 
-    try d.print(m);
+    try spew.dump(m);
 
     const d3 = spew.Dumper{ .options = .{ .structs_pretty_print = false } };
 

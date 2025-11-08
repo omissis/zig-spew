@@ -3,7 +3,7 @@ const std = @import("std");
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -42,12 +42,6 @@ pub fn build(b: *std.Build) void {
     // running `zig build`).
     b.installArtifact(lib);
 
-    _ = b.addModule("spew", .{
-        .root_source_file = b.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const lib_unit_tests = b.addTest(.{
@@ -62,25 +56,37 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
 
-    // Add run step for the main binary
+    // Loop through the examples folder and create a run-* step for every file found in that directory.
+    var examples_dir: std.fs.Dir = try std.fs.cwd().openDir("examples/", .{ .iterate = true });
+    defer examples_dir.close();
+    var examples = examples_dir.iterate();
+    while (try examples.next()) |entry| {
+        if (!std.mem.endsWith(u8, entry.name, ".zig")) {
+            continue;
+        }
 
-    const exe_module = b.addModule("spew", .{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+        const module = std.Build.Module.create(b, std.Build.Module.CreateOptions{
+            .root_source_file = b.path(b.fmt("examples/{s}", .{entry.name})),
+            .target = target,
+            .optimize = optimize,
+        });
 
-    const exe = b.addExecutable(.{
-        .name = "zig-spew",
-        .root_module = exe_module,
-    });
+        const name = entry.name[0 .. entry.name.len - ".zig".len];
 
-    b.installArtifact(exe);
+        const example_exe = b.addExecutable(.{
+            .name = name,
+            .root_module = module,
+        });
+        example_exe.root_module.addImport("spew", lib_mod); // Link module
+        b.installArtifact(example_exe);
 
-    const run_cmd = b.addRunArtifact(exe);
-
-    run_cmd.step.dependOn(b.getInstallStep());
-
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+        // Add run step
+        const run_example = b.addRunArtifact(example_exe);
+        run_example.step.dependOn(b.getInstallStep());
+        if (b.args) |args| run_example.addArgs(args);
+        b.step(
+            b.fmt("run-{s}", .{name}),
+            b.fmt("Run example: {s}", .{name}),
+        ).dependOn(&run_example.step);
+    }
 }
