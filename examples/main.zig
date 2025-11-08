@@ -89,6 +89,8 @@ pub fn main() !void {
     chars_slice[4] = '\n';
     try d.print(chars_slice);
 
+    // Structs
+
     const Currency = struct {
         Name: []const u8,
         Symbol: []const u8,
