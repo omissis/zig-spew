@@ -1,5 +1,4 @@
 const std = @import("std");
-const lang = @import("lang.zig");
 
 const ColorFormat = enum { none, basic, extended, rgb };
 

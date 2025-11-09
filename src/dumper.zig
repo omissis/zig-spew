@@ -1,5 +1,4 @@
 const std = @import("std");
-const lang = @import("lang.zig");
 const theme = @import("theme.zig");
 
 // dump is a convenience function to be used only for debugging purposes: do not use it in production,
@@ -271,9 +270,9 @@ pub const DumpOptions = struct {
     indent_ch: u8 = ' ',
     max_depth: u32 = 10,
     palette: theme.Palette = theme.DefaultPalette,
-    decimal_places: u6 = 3,
-    decimal_min_width: u6 = 0,
-    hex_padding: u6 = 0,
+    // decimal_places: u6 = 3, // for future usage
+    // decimal_min_width: u6 = 0, // for future usage
+    // hex_padding: u6 = 0, // for future usage
     string_interpretation: bool = true, // whether to interpret arrays and slices of u8 as strings
     bytes_interpretation: bool = true, // whether to interpret u8 as bytes instead of decimals
     bytes_representation: theme.BytesRepresentation = .hex, // wheter to represent bytes as decimals or hexadecimals
