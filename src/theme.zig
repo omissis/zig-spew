@@ -11,22 +11,34 @@ const Color = union(ColorFormat) {
     pub fn write(self: Color, writer: *std.Io.Writer, comptime fmt: []const u8, val: anytype) !void {
         return switch (self) {
             Color.none => {
-                const cmft = std.fmt.comptimePrint("{s}", .{fmt});
+                const cmft = std.fmt.comptimePrint(
+                    "{s}",
+                    .{fmt},
+                );
 
                 return writer.print(cmft, .{val});
             },
             Color.basic => |c| {
-                const cmft = std.fmt.comptimePrint("\x1b[{{d}}m{s}\x1b[0m", .{fmt});
+                const cmft = std.fmt.comptimePrint(
+                    "\x1b[{{d}}m{s}\x1b[0m",
+                    .{fmt},
+                );
 
                 return writer.print(cmft, .{ @intFromEnum(c), val });
             },
             Color.extended => |c| {
-                const cmft = std.fmt.comptimePrint("\x1b[38;5;{{d}}m{s}\x1b[0m", .{fmt});
+                const cmft = std.fmt.comptimePrint(
+                    "\x1b[38;5;{{d}}m{s}\x1b[0m",
+                    .{fmt},
+                );
 
                 return writer.print(cmft, .{ c, val });
             },
             Color.rgb => |c| {
-                const cmft = std.fmt.comptimePrint("\x1b[38;2;{{d}};{{d}};{{d}}m{s}\x1b[0m", .{fmt});
+                const cmft = std.fmt.comptimePrint(
+                    "\x1b[38;2;{{d}};{{d}};{{d}}m{s}\x1b[0m",
+                    .{fmt},
+                );
 
                 return writer.print(cmft, .{ c.red, c.green, c.blue, val });
             },
