@@ -16,7 +16,7 @@ Pretty printer for Zig data structures to help with debugging.
 
 ```Zig
 const std = @import("std");
-const spew = @import("spew.zig");
+const spew = @import("spew");
 
 pub fn main() !void {
     const d = spew.Dumper{};
