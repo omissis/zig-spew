@@ -1,12 +1,8 @@
-const dumper = @import("dumper.zig");
-const theme = @import("theme.zig");
+pub const Dumper = @import("Dumper.zig");
+pub const theme = @import("theme.zig");
 
-pub const dump = dumper.dump;
-pub const Dumper = dumper.Dumper;
-pub const DumpOptions = dumper.DumpOptions;
-pub const DumpContext = dumper.DumpContext;
-
-pub const Palette = theme.Palette;
-pub const DefaultTheme = theme.DefaultPalette;
-pub const MonochromaticTheme = theme.MonochromaticPalette;
-pub const BytesRepresentation = theme.BytesRepresentation;
+// dump is a convenience function to be used only for debugging purposes: do not use it in production,
+// as it creates and destroy the whole dumper every time you call it.
+pub fn dump(value: anytype) !void {
+    return (Dumper{}).print(value);
+}

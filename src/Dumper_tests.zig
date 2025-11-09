@@ -1,43 +1,44 @@
 const std = @import("std");
-const spew = @import("spew");
+const theme = @import("theme.zig");
+const Dumper = @import("Dumper.zig");
 
 test "dump bool" {
-    const dumper, var arena = setup();
+    const d, var arena = setup();
     defer arena.deinit();
 
     try std.testing.expectEqualStrings(
         "true",
-        try dumper.format(arena.allocator(), true),
+        try d.format(arena.allocator(), true),
     );
     try std.testing.expectEqualStrings(
         "false",
-        try dumper.format(arena.allocator(), false),
+        try d.format(arena.allocator(), false),
     );
 }
 
 test "dump integer" {
-    const dumper, var arena = setup();
+    const d, var arena = setup();
     defer arena.deinit();
 
     try std.testing.expectEqualStrings(
         "42",
-        try dumper.format(arena.allocator(), 42),
+        try d.format(arena.allocator(), 42),
     );
 }
 
 test "dump string" {
-    const dumper, var arena = setup();
+    const d, var arena = setup();
     defer arena.deinit();
 
     try std.testing.expectEqualStrings(
         "\"42\"",
-        try dumper.format(arena.allocator(), "42"),
+        try d.format(arena.allocator(), "42"),
     );
 
     // Do not interpret strings: show bytes list instead
-    const d_no_str = spew.Dumper{
+    const d_no_str = Dumper.Dumper{
         .options = .{
-            .palette = spew.MonochromaticTheme,
+            .palette = theme.MonochromaticPalette,
             .string_interpretation = false,
         },
     };
@@ -48,54 +49,54 @@ test "dump string" {
 }
 
 test "dump float" {
-    const dumper, var arena = setup();
+    const d, var arena = setup();
     defer arena.deinit();
 
     try std.testing.expectEqualStrings(
         "3.14",
-        try dumper.format(arena.allocator(), 3.14),
+        try d.format(arena.allocator(), 3.14),
     );
 }
 
 test "dump null" {
-    const dumper, var arena = setup();
+    const d, var arena = setup();
     defer arena.deinit();
 
     try std.testing.expectEqualStrings(
         "null",
-        try dumper.format(arena.allocator(), null),
+        try d.format(arena.allocator(), null),
     );
 }
 
 test "dump undefined" {
-    const dumper, var arena = setup();
+    const d, var arena = setup();
     defer arena.deinit();
 
     try std.testing.expectEqualStrings(
         "undefined",
-        try dumper.format(arena.allocator(), undefined),
+        try d.format(arena.allocator(), undefined),
     );
 }
 
 test "dump arrays" {
-    const dumper, var arena = setup();
+    const d, var arena = setup();
     defer arena.deinit();
 
     const int_array: [4]u4 = .{ 1, 2, 3, 4 };
     try std.testing.expectEqualStrings(
         "[1, 2, 3, 4]",
-        try dumper.format(arena.allocator(), int_array),
+        try d.format(arena.allocator(), int_array),
     );
 
     const bool_array: [4]bool = .{ true, false, true, false };
     try std.testing.expectEqualStrings(
         "[true, false, true, false]",
-        try dumper.format(arena.allocator(), bool_array),
+        try d.format(arena.allocator(), bool_array),
     );
 }
 
 test "dump slices" {
-    const dumper, var arena = setup();
+    const d, var arena = setup();
     defer arena.deinit();
 
     var int_slice = try arena.allocator().alloc(u4, 5);
@@ -107,7 +108,7 @@ test "dump slices" {
 
     try std.testing.expectEqualStrings(
         "[1, 2, 3, 5, 8]",
-        try dumper.format(arena.allocator(), int_slice),
+        try d.format(arena.allocator(), int_slice),
     );
 }
 
@@ -116,17 +117,17 @@ test "dump u8 bytes" {
     defer arena.deinit();
 
     // Default: bytes interpreted as hex
-    const d_hex = spew.Dumper{ .options = .{ .palette = spew.MonochromaticTheme } };
+    const d_hex = Dumper.Dumper{ .options = .{ .palette = theme.MonochromaticPalette } };
     try std.testing.expectEqualStrings(
         "0xf",
         try d_hex.format(arena.allocator(), @as(u8, 15)),
     );
 
     // Decimal representation for bytes
-    const d_dec = spew.Dumper{
+    const d_dec = Dumper.Dumper{
         .options = .{
-            .palette = spew.MonochromaticTheme,
-            .bytes_representation = spew.BytesRepresentation.dec,
+            .palette = theme.MonochromaticPalette,
+            .bytes_representation = theme.BytesRepresentation.dec,
         },
     };
     try std.testing.expectEqualStrings(
@@ -136,25 +137,25 @@ test "dump u8 bytes" {
 }
 
 test "dump pointers" {
-    const dumper, var arena = setup();
+    const d, var arena = setup();
     defer arena.deinit();
 
     var int_value: u7 = 123;
     try std.testing.expectEqualStrings(
         "123",
-        try dumper.format(arena.allocator(), &int_value),
+        try d.format(arena.allocator(), &int_value),
     );
 
     var float_value: f64 = 3.1415;
     try std.testing.expectEqualStrings(
         "3.1415",
-        try dumper.format(arena.allocator(), &float_value),
+        try d.format(arena.allocator(), &float_value),
     );
 
     var bool_value: bool = true;
     try std.testing.expectEqualStrings(
         "true",
-        try dumper.format(arena.allocator(), &bool_value),
+        try d.format(arena.allocator(), &bool_value),
     );
 }
 
@@ -176,9 +177,9 @@ test "dump struct (pretty and compact)" {
         .Currency = .{ .Name = "Euro", .Symbol = "€" },
     };
 
-    const d_pretty = spew.Dumper{
+    const d_pretty = Dumper.Dumper{
         .options = .{
-            .palette = spew.MonochromaticTheme,
+            .palette = theme.MonochromaticPalette,
             .structs_pretty_print = true,
         },
     };
@@ -198,9 +199,9 @@ test "dump struct (pretty and compact)" {
         try d_pretty.format(arena.allocator(), m),
     );
 
-    const d_compact = spew.Dumper{
+    const d_compact = Dumper.Dumper{
         .options = .{
-            .palette = spew.MonochromaticTheme,
+            .palette = theme.MonochromaticPalette,
             .structs_pretty_print = false,
         },
     };
@@ -215,11 +216,11 @@ test "dump struct (pretty and compact)" {
     );
 }
 
-fn setup() struct { spew.Dumper, std.heap.ArenaAllocator } {
+fn setup() struct { Dumper.Dumper, std.heap.ArenaAllocator } {
     return .{
-        spew.Dumper{
+        Dumper.Dumper{
             .options = .{
-                .palette = spew.MonochromaticTheme,
+                .palette = theme.MonochromaticPalette,
             },
         },
         std.heap.ArenaAllocator.init(std.heap.page_allocator),

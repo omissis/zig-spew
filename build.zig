@@ -51,29 +51,43 @@ pub fn build(b: *std.Build) !void {
     });
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
-    const int_tests_mod = b.createModule(.{
-        .root_source_file = b.path("src/integration_tests.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    // Integration tests in a separate file
-    const integration_tests = b.addTest(.{
-        .root_module = int_tests_mod,
-    });
-    // Allow @import("spew") from integration tests
-    integration_tests.root_module.addImport("spew", lib_mod);
-    const run_integration_tests = b.addRunArtifact(integration_tests);
+    var root_dir = try std.fs.cwd().openDir("src/", .{ .iterate = true });
+    defer root_dir.close();
 
     // Similar to creating the run step earlier, this exposes a `test` step to
     // the `zig build --help` menu, providing a way for the user to request
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
-    test_step.dependOn(&run_integration_tests.step);
+
+    var test_entries = root_dir.iterate();
+    while (try test_entries.next()) |entry| {
+        if (entry.kind != std.fs.File.Kind.file) {
+            continue;
+        }
+
+        if (!std.mem.endsWith(u8, entry.name, "_tests.zig")) {
+            continue;
+        }
+
+        const module = std.Build.Module.create(b, std.Build.Module.CreateOptions{
+            .root_source_file = b.path(b.fmt("src/{s}", .{entry.name})),
+            .target = target,
+            .optimize = optimize,
+        });
+
+        // Existing unit tests for the library module
+        const tests = b.addTest(.{
+            .root_module = module,
+        });
+
+        const run_tests = b.addRunArtifact(tests);
+
+        test_step.dependOn(&run_tests.step);
+    }
 
     // Loop through the examples folder and create a run-* step for every file found in that directory.
-    var examples_dir: std.fs.Dir = try std.fs.cwd().openDir("examples/", .{ .iterate = true });
+    var examples_dir = try std.fs.cwd().openDir("examples/", .{ .iterate = true });
     defer examples_dir.close();
     var examples = examples_dir.iterate();
     while (try examples.next()) |entry| {
