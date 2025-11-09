@@ -1,8 +1,8 @@
 const std = @import("std");
 
-const ColorFormat = enum { none, basic, extended, rgb };
+pub const ColorFormat = enum { none, basic, extended, rgb };
 
-const Color = union(ColorFormat) {
+pub const Color = union(ColorFormat) {
     none: NoColor,
     basic: BasicColor,
     extended: ExtendedColor,
@@ -46,9 +46,9 @@ const Color = union(ColorFormat) {
     }
 };
 
-const NoColor = void;
+pub const NoColor = void;
 
-const BasicColor = enum(u7) {
+pub const BasicColor = enum(u7) {
     // Standard colors
     BlackForeground = 30,
     BlackBackground = 40,
@@ -87,9 +87,9 @@ const BasicColor = enum(u7) {
     BrightWhiteBackground = 107,
 };
 
-const ExtendedColor = u8;
+pub const ExtendedColor = u8;
 
-const RgbColor = struct {
+pub const RgbColor = struct {
     red: u8,
     green: u8,
     blue: u8,
