@@ -9,12 +9,13 @@ pub const Dumper = @This();
 
 pub const Options = struct {
     indent_size: u32 = 4,
-    indent_ch: u8 = ' ',
+    indent_char: u8 = ' ',
     max_depth: u32 = 10,
     palette: theme.Palette = theme.DefaultPalette,
     // decimal_places: u6 = 3, // for future usage
     // decimal_min_width: u6 = 0, // for future usage
     // hex_padding: u6 = 0, // for future usage
+    print_types: bool = true, // whether to display type information besides the value
     string_interpretation: bool = true, // whether to interpret arrays and slices of u8 as strings
     bytes_interpretation: bool = true, // whether to interpret u8 as bytes instead of decimals
     bytes_representation: theme.BytesRepresentation = .hex, // wheter to represent bytes as decimals or hexadecimals
@@ -23,11 +24,29 @@ pub const Options = struct {
 
 const Context = struct {
     cur_depth: u16 = 0,
+    has_list_parent: bool = false, // whether the parent is a list type
+    parent_type: ?type = null,
 
     pub fn incDepth(self: Context) Context {
         var new = self;
 
         new.cur_depth += 1;
+
+        return new;
+    }
+
+    pub fn withParentType(self: Context, typ: type) Context {
+        var new = self;
+
+        new.parent_type = typ;
+
+        return new;
+    }
+
+    pub fn withListParent(self: Context) Context {
+        var new = self;
+
+        new.has_list_parent = true;
 
         return new;
     }
@@ -71,38 +90,38 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
 
     switch (type_info) {
         .bool => {
-            return self.formatBoolean(writer, value);
+            return self.formatBoolean(writer, value, ctx);
         },
         .int => {
             if (self.options.bytes_interpretation) {
                 if (type_info.int.signedness == .unsigned and type_info.int.bits == 8) {
-                    return self.formatByte(writer, value);
+                    return self.formatByte(writer, value, ctx);
                 }
             }
 
-            return self.formatInt(writer, value);
+            return self.formatInt(writer, value, ctx);
         },
         .comptime_int => {
-            return self.formatInt(writer, value);
+            return self.formatInt(writer, value, ctx);
         },
         .float, .comptime_float => {
-            return self.formatFloat(writer, value);
+            return self.formatFloat(writer, value, ctx);
         },
         .null => {
-            return self.formatNull(writer);
+            return self.formatNull(writer, ctx);
         },
         .undefined => {
-            return self.formatUndefined(writer);
+            return self.formatUndefined(writer, ctx);
         },
         .array => {
             return self.formatList(writer, value, ctx);
         },
         .optional => {
             if (value == null) {
-                return self.formatNull(writer);
+                return self.formatNull(writer, ctx);
             }
 
-            return self.write(writer, value.?, ctx.incDepth());
+            return self.write(writer, value.?, ctx.incDepth().withParentType(type_of));
         },
         .pointer => {
             const child_type_info = @typeInfo(type_info.pointer.child);
@@ -117,7 +136,7 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
                             switch (child_type_info.array.child) {
                                 u8 => {
                                     if (self.options.string_interpretation) {
-                                        return self.formatString(writer, value);
+                                        return self.formatString(writer, value, ctx);
                                     }
                                 },
                                 else => {},
@@ -126,14 +145,14 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
                         else => {},
                     }
 
-                    return self.write(writer, value.*, ctx.incDepth());
+                    return self.write(writer, value.*, ctx.incDepth().withParentType(type_of));
                 },
                 .slice => {
                     switch (child_type_info) {
                         .int => {
                             if (child_type_info.int.signedness == .unsigned and child_type_info.int.bits == 8) {
                                 if (self.options.string_interpretation) {
-                                    return self.formatString(writer, value);
+                                    return self.formatString(writer, value, ctx);
                                 }
                             }
                         },
@@ -171,34 +190,48 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
     return;
 }
 
-fn formatString(self: *const Dumper, writer: *std.Io.Writer, val: anytype) !void {
+fn formatString(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx);
+
     return self.options.palette.strings.write(writer, "\"{s}\"", val);
 }
 
-fn formatByte(self: *const Dumper, writer: *std.Io.Writer, val: anytype) !void {
+fn formatByte(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx);
+
     return switch (self.options.bytes_representation) {
         theme.BytesRepresentation.hex => try self.options.palette.bytes.write(writer, "0x{x}", val),
         theme.BytesRepresentation.dec => try self.options.palette.bytes.write(writer, "{d}", val),
     };
 }
 
-fn formatInt(self: *const Dumper, writer: *std.Io.Writer, val: anytype) !void {
+fn formatInt(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx);
+
     return self.options.palette.numbers.write(writer, "{d}", val);
 }
 
-fn formatFloat(self: *const Dumper, writer: *std.Io.Writer, val: anytype) !void {
+fn formatFloat(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx);
+
     return self.options.palette.numbers.write(writer, "{d}", val);
 }
 
-fn formatBoolean(self: *const Dumper, writer: *std.Io.Writer, val: anytype) !void {
+fn formatBoolean(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx);
+
     return try self.options.palette.booleans.write(writer, "{s}", if (val) "true" else "false");
 }
 
-fn formatNull(self: *const Dumper, writer: *std.Io.Writer) !void {
+fn formatNull(self: *const Dumper, writer: *std.Io.Writer, ctx: Context) !void {
+    try self.writeValueType(writer, null, ctx);
+
     return try self.options.palette.empties.write(writer, "{s}", "null");
 }
 
-fn formatUndefined(self: *const Dumper, writer: *std.Io.Writer) !void {
+fn formatUndefined(self: *const Dumper, writer: *std.Io.Writer, ctx: Context) !void {
+    try self.writeValueType(writer, undefined, ctx);
+
     return try self.options.palette.empties.write(writer, "{s}", "undefined");
 }
 
@@ -207,10 +240,12 @@ fn formatBrackets(self: *const Dumper, writer: *std.Io.Writer, val: anytype) !vo
 }
 
 fn formatList(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx);
+
     try self.formatBrackets(writer, "[");
 
     for (val, 0..) |item, i| {
-        try self.write(writer, item, ctx.incDepth());
+        try self.write(writer, item, ctx.incDepth().withListParent());
 
         if (i != val.len - 1) {
             _ = try writer.write(", ");
@@ -251,7 +286,9 @@ fn formatStruct(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: 
     const eol = if (self.options.structs_pretty_print) "\n" else " ";
 
     // print them all!
-    _ = try writer.print("{s} {{{s}", .{ @typeName(type_of), eol });
+    try self.writeValueType(writer, val, ctx);
+
+    _ = try writer.print("{{{s}", .{eol});
 
     inline for (fields, 0..) |field, i| {
         const field_value = @field(val, field.name);
@@ -273,6 +310,14 @@ fn formatStruct(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: 
     return;
 }
 
+fn writeValueType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    if (self.options.print_types and !ctx.has_list_parent) {
+        const type_name = if (ctx.parent_type) |typ| @typeName(typ) else @typeName(@TypeOf(val));
+
+        try self.options.palette.types.write(writer, "{s} ", type_name);
+    }
+}
+
 fn indent(self: *const Dumper, writer: *std.Io.Writer, depth: u16, pretty: bool) !void {
     if (depth == 0) {
         return;
@@ -286,7 +331,7 @@ fn indent(self: *const Dumper, writer: *std.Io.Writer, depth: u16, pretty: bool)
         return;
     }
 
-    _ = try writer.splatByte(self.options.indent_ch, self.options.indent_size * depth);
+    _ = try writer.splatByte(self.options.indent_char, self.options.indent_size * depth);
 
     return;
 }
