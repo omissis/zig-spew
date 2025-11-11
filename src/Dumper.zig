@@ -139,10 +139,14 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
                                         return self.formatString(writer, value, ctx);
                                     }
                                 },
-                                else => {},
+                                else => {
+                                    // TODO: implement this
+                                },
                             }
                         },
-                        else => {},
+                        else => {
+                            // TODO: implement this
+                        },
                     }
 
                     return self.write(writer, value.*, ctx.incDepth().withParentType(type_of));
@@ -156,12 +160,16 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
                                 }
                             }
                         },
-                        else => {},
+                        else => {
+                            // TODO: implement this
+                        },
                     }
 
                     return self.formatList(writer, value, ctx);
                 },
-                else => {},
+                else => {
+                    // TODO: implement this
+                },
             }
         },
         .@"struct" => {
@@ -181,7 +189,9 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
         //.@"anyframe"
         //.vector
         //.enum_literal
-        else => {},
+        else => {
+            // TODO: implement this
+        },
     }
 
     // std.debug.print("Value {any} has unsupported type: {any}\n", .{ value, type_of });
