@@ -27,16 +27,13 @@ test "dump integer" {
 }
 
 test "dump string" {
-    // const d, var arena = setup();
-    // defer arena.deinit();
-
-    // try std.testing.expectEqualStrings(
-    //     "*const [2:0]u8 \"42\"",
-    //     try d.format(arena.allocator(), "42"),
-    // );
-
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const d, var arena = setup();
     defer arena.deinit();
+
+    try std.testing.expectEqualStrings(
+        "*const [2:0]u8 \"42\"",
+        try d.format(arena.allocator(), "42"),
+    );
 
     // Do not interpret strings: show bytes list instead
     const d_no_str = Dumper.Dumper{
