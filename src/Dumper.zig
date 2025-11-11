@@ -175,8 +175,10 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
         .@"struct" => {
             return self.formatStruct(writer, value, ctx);
         },
+        .type => {
+            return self.formatType(writer, value, ctx);
+        },
         // TODO: implement all the following types
-        //.type
         //.void
         //.noreturn
         //.error_union
@@ -320,11 +322,17 @@ fn formatStruct(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: 
     return;
 }
 
+fn formatType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx);
+
+    return self.options.palette.types.write(writer, "{s}", @typeName(val));
+}
+
 fn writeValueType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
     if (self.options.print_types and !ctx.has_list_parent) {
         const type_name = if (ctx.parent_type) |typ| @typeName(typ) else @typeName(@TypeOf(val));
 
-        try self.options.palette.types.write(writer, "{s} ", type_name);
+        try self.options.palette.valueTypes.write(writer, "{s} ", type_name);
     }
 }
 

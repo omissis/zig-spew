@@ -104,6 +104,7 @@ pub const Palette = struct {
     bytes: Color,
     empties: Color,
     brackets: Color,
+    valueTypes: Color,
     types: Color,
 };
 
@@ -114,7 +115,8 @@ pub const DefaultPalette = Palette{
     .bytes = Color{ .basic = BasicColor.GreenForeground },
     .empties = Color{ .basic = BasicColor.BrightBlueForeground },
     .brackets = Color{ .basic = BasicColor.MagentaForeground },
-    .types = Color{ .basic = BasicColor.WhiteForeground },
+    .valueTypes = Color{ .basic = BasicColor.WhiteForeground },
+    .types = Color{ .basic = BasicColor.YellowForeground },
 };
 
 pub const MonochromaticPalette = Palette{
@@ -124,5 +126,6 @@ pub const MonochromaticPalette = Palette{
     .bytes = Color{ .none = NoColor{} },
     .empties = Color{ .none = NoColor{} },
     .brackets = Color{ .none = NoColor{} },
+    .valueTypes = Color{ .none = NoColor{} },
     .types = Color{ .none = NoColor{} },
 };

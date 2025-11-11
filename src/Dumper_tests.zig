@@ -217,6 +217,16 @@ test "dump struct (pretty and compact)" {
     );
 }
 
+test "dump types" {
+    const d, var arena = setup();
+    defer arena.deinit();
+
+    try std.testing.expectEqualStrings(
+        "type Dumper_tests.exampleStruct",
+        try d.format(arena.allocator(), exampleStruct),
+    );
+}
+
 fn setup() struct { Dumper.Dumper, std.heap.ArenaAllocator } {
     return .{
         Dumper.Dumper{
@@ -227,3 +237,9 @@ fn setup() struct { Dumper.Dumper, std.heap.ArenaAllocator } {
         std.heap.ArenaAllocator.init(std.heap.page_allocator),
     };
 }
+
+const exampleStruct = struct {
+    name: []u8,
+    description: []u8,
+    active: bool,
+};

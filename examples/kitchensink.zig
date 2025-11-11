@@ -112,4 +112,12 @@ pub fn main() !void {
     const d3 = spew.Dumper{ .options = .{ .structs_pretty_print = false } };
 
     try d3.print(m);
+
+    try d.print(exampleStruct);
 }
+
+const exampleStruct = struct {
+    name: []u8,
+    description: []u8,
+    active: bool,
+};
