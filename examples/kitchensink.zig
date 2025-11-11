@@ -114,10 +114,19 @@ pub fn main() !void {
     try d3.print(m);
 
     try d.print(exampleStruct);
+
+    try d.print(exampleEnum.ciao);
 }
 
 const exampleStruct = struct {
     name: []u8,
     description: []u8,
     active: bool,
+};
+
+const exampleEnum = enum(u8) {
+    hello,
+    world,
+    ciao,
+    mondo,
 };

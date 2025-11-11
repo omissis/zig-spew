@@ -227,6 +227,18 @@ test "dump types" {
     );
 }
 
+test "dump enums" {
+    const d, var arena = setup();
+    defer arena.deinit();
+
+    const e = exampleEnum.ciao;
+
+    try std.testing.expectEqualStrings(
+        "banana",
+        try d.format(arena.allocator(), e),
+    );
+}
+
 fn setup() struct { Dumper.Dumper, std.heap.ArenaAllocator } {
     return .{
         Dumper.Dumper{
@@ -242,4 +254,11 @@ const exampleStruct = struct {
     name: []u8,
     description: []u8,
     active: bool,
+};
+
+const exampleEnum = enum(u8) {
+    hello,
+    world,
+    ciao,
+    mondo,
 };

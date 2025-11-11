@@ -178,12 +178,14 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
         .type => {
             return self.formatType(writer, value, ctx);
         },
+        .@"enum" => {
+            return self.formatEnum(writer, value, ctx);
+        },
         // TODO: implement all the following types
         //.void
         //.noreturn
         //.error_union
         //.error_set
-        //.@"enum"
         //.@"union"
         //.@"fn"
         //.@"opaque"
@@ -326,6 +328,12 @@ fn formatType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Co
     try self.writeValueType(writer, val, ctx);
 
     return self.options.palette.types.write(writer, "{s}", @typeName(val));
+}
+
+fn formatEnum(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx);
+
+    return self.options.palette.enums.write(writer, "{any}", val);
 }
 
 fn writeValueType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
