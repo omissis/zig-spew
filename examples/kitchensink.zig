@@ -116,6 +116,8 @@ pub fn main() !void {
     try d.print(exampleStruct);
 
     try d.print(exampleEnum.ciao);
+
+    try d.print(@Vector(4, i32){ 1, 2, 3, 4 });
 }
 
 const exampleStruct = struct {

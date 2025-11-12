@@ -114,7 +114,7 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
             return self.formatUndefined(writer, ctx);
         },
         .array => {
-            return self.formatList(writer, value, ctx);
+            return self.formatList(writer, value, value.len, ctx);
         },
         .optional => {
             if (value == null) {
@@ -165,7 +165,7 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
                         },
                     }
 
-                    return self.formatList(writer, value, ctx);
+                    return self.formatList(writer, value, value.len, ctx);
                 },
                 else => {
                     // TODO: implement this
@@ -191,7 +191,9 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
         //.@"opaque"
         //.frame
         //.@"anyframe"
-        //.vector
+        .vector => {
+            return self.formatList(writer, value, type_info.vector.len, ctx);
+        },
         //.enum_literal
         else => {
             // TODO: implement this
@@ -253,15 +255,15 @@ fn formatBrackets(self: *const Dumper, writer: *std.Io.Writer, val: anytype) !vo
     return try self.options.palette.brackets.write(writer, "{s}", val);
 }
 
-fn formatList(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+fn formatList(self: *const Dumper, writer: *std.Io.Writer, val: anytype, len: usize, ctx: Context) !void {
     try self.writeValueType(writer, val, ctx);
 
     try self.formatBrackets(writer, "[");
 
-    for (val, 0..) |item, i| {
-        try self.write(writer, item, ctx.incDepth().withListParent());
+    for (0..len) |i| {
+        try self.write(writer, val[i], ctx.incDepth().withListParent());
 
-        if (i != val.len - 1) {
+        if (i != len - 1) {
             _ = try writer.write(", ");
         }
     }

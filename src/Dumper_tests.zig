@@ -113,6 +113,23 @@ test "dump slices" {
     );
 }
 
+test "dump vectors" {
+    const d, var arena = setup();
+    defer arena.deinit();
+
+    const int_vector: @Vector(4, i32) = .{ 1, 2, 3, 4 };
+    try std.testing.expectEqualStrings(
+        "@Vector(4, i32) [1, 2, 3, 4]",
+        try d.format(arena.allocator(), int_vector),
+    );
+
+    const bool_vector: @Vector(4, bool) = .{ true, false, true, false };
+    try std.testing.expectEqualStrings(
+        "@Vector(4, bool) [true, false, true, false]",
+        try d.format(arena.allocator(), bool_vector),
+    );
+}
+
 test "dump u8 bytes" {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -234,7 +251,7 @@ test "dump enums" {
     const e = exampleEnum.ciao;
 
     try std.testing.expectEqualStrings(
-        "banana",
+        "Dumper_tests.exampleEnum .ciao",
         try d.format(arena.allocator(), e),
     );
 }
