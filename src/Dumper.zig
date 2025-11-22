@@ -199,8 +199,10 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
         .@"fn" => {
             return self.formatFunction(writer, value, ctx);
         },
+        .void => {
+            return self.formatVoid(writer, value, ctx);
+        },
         // TODO: implement all the following types
-        //.void
         //.noreturn
         //.@"union"
         //.@"opaque"
@@ -370,6 +372,12 @@ fn formatErrorUnion(self: *const Dumper, writer: *std.Io.Writer, val: anytype, c
     } else |err| {
         return self.formatErrorSet(writer, err, ctx);
     }
+}
+
+fn formatVoid(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx);
+
+    return self.options.palette.empties.write(writer, "{any}", val);
 }
 
 fn writeValueType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {

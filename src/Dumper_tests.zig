@@ -312,6 +312,18 @@ test "dump functions" {
     );
 }
 
+test "dump void" {
+    const d, var arena = setup();
+    defer arena.deinit();
+
+    const v: void = {};
+
+    try std.testing.expectEqualStrings(
+        "void void",
+        try d.format(arena.allocator(), v),
+    );
+}
+
 fn setup() struct { Dumper.Dumper, std.heap.ArenaAllocator } {
     return .{
         Dumper.Dumper{

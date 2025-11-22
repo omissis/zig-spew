@@ -141,6 +141,11 @@ pub fn main() !void {
     // Functions
 
     try d.print(greet);
+
+    // Void
+
+    const v: void = {};
+    try d.print(v);
 }
 
 const exampleStruct = struct {
