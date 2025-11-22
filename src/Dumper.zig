@@ -202,17 +202,12 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
         .void => {
             return self.formatVoid(writer, value, ctx);
         },
-        // TODO: implement all the following types
-        //.noreturn
-        //.@"union"
-        //.@"opaque"
-        //.frame
-        //.@"anyframe"
         .vector => {
             return self.formatList(writer, value, type_info.vector.len, ctx);
         },
+        //.@"union"
         else => {
-            // TODO: implement this
+            return self.formatUnsupported(writer, value, ctx);
         },
     }
 
@@ -378,6 +373,12 @@ fn formatVoid(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Co
     try self.writeValueType(writer, val, ctx);
 
     return self.options.palette.empties.write(writer, "{any}", val);
+}
+
+fn formatUnsupported(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx);
+
+    return self.options.palette.empties.write(writer, "[unsupported]", .{});
 }
 
 fn writeValueType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
