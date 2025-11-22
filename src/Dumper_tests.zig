@@ -266,6 +266,42 @@ test "dump enum literals" {
     );
 }
 
+test "dump error sets" {
+    const d, var arena = setup();
+    defer arena.deinit();
+
+    const e = SpewError.BadValues;
+
+    try std.testing.expectEqualStrings(
+        "error{BadValues,StinkyTypes,UglyColors} error.BadValues",
+        try d.format(arena.allocator(), e),
+    );
+}
+
+test "dump error unions" {
+    const d, var arena = setup();
+    defer arena.deinit();
+
+    const e = SpewError.StinkyTypes;
+    const f: SpewError!u8 = 127;
+    const g: SpewError!comptime_int = SpewError.UglyColors;
+
+    try std.testing.expectEqualStrings(
+        "error{BadValues,StinkyTypes,UglyColors} error.StinkyTypes",
+        try d.format(arena.allocator(), e),
+    );
+
+    try std.testing.expectEqualStrings(
+        "u8 0x7f",
+        try d.format(arena.allocator(), f),
+    );
+
+    try std.testing.expectEqualStrings(
+        "error{BadValues,StinkyTypes,UglyColors} error.UglyColors",
+        try d.format(arena.allocator(), g),
+    );
+}
+
 fn setup() struct { Dumper.Dumper, std.heap.ArenaAllocator } {
     return .{
         Dumper.Dumper{
@@ -288,4 +324,10 @@ const exampleEnum = enum(u8) {
     world,
     ciao,
     mondo,
+};
+
+const SpewError = error{
+    UglyColors,
+    BadValues,
+    StinkyTypes,
 };

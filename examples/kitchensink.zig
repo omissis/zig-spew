@@ -113,13 +113,30 @@ pub fn main() !void {
 
     try d3.print(m);
 
+    // Types
+
     try d.print(exampleStruct);
+
+    // Enums
 
     try d.print(exampleEnum.ciao);
 
     try d.print(.salut);
 
+    // Vectors
+
     try d.print(@Vector(4, i32){ 1, 2, 3, 4 });
+
+    // Errors
+
+    const uno: SpewError = SpewError.StinkyTypes;
+    try d.print(uno);
+
+    const due: SpewError!u8 = 127;
+    try d.print(due);
+
+    const tre: SpewError!comptime_int = SpewError.UglyColors;
+    try d.print(tre);
 }
 
 const exampleStruct = struct {
@@ -133,4 +150,10 @@ const exampleEnum = enum(u8) {
     world,
     ciao,
     mondo,
+};
+
+const SpewError = error{
+    UglyColors,
+    BadValues,
+    StinkyTypes,
 };
