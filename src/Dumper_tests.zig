@@ -302,6 +302,16 @@ test "dump error unions" {
     );
 }
 
+test "dump functions" {
+    const d, var arena = setup();
+    defer arena.deinit();
+
+    try std.testing.expectEqualStrings(
+        "fn ([]u8) @typeInfo(@typeInfo(@TypeOf(Dumper_tests.greet)).@\"fn\".return_type.?).error_union.error_set!void",
+        try d.format(arena.allocator(), greet),
+    );
+}
+
 fn setup() struct { Dumper.Dumper, std.heap.ArenaAllocator } {
     return .{
         Dumper.Dumper{
@@ -331,3 +341,7 @@ const SpewError = error{
     BadValues,
     StinkyTypes,
 };
+
+fn greet(who: []u8) !void {
+    std.debug.print("hello {s}", .{who});
+}

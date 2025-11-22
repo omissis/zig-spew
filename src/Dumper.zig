@@ -26,6 +26,7 @@ const Context = struct {
     cur_depth: u16 = 0,
     has_list_parent: bool = false, // whether the parent is a list type
     parent_type: ?type = null,
+    print_value: bool = true,
 
     pub fn incDepth(self: Context) Context {
         var new = self;
@@ -47,6 +48,14 @@ const Context = struct {
         var new = self;
 
         new.has_list_parent = true;
+
+        return new;
+    }
+
+    pub fn withoutValue(self: Context) Context {
+        var new = self;
+
+        new.print_value = false;
 
         return new;
     }
@@ -187,18 +196,19 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
         .error_set => {
             return self.formatErrorSet(writer, value, ctx);
         },
+        .@"fn" => {
+            return self.formatFunction(writer, value, ctx);
+        },
         // TODO: implement all the following types
         //.void
         //.noreturn
         //.@"union"
-        //.@"fn"
         //.@"opaque"
         //.frame
         //.@"anyframe"
         .vector => {
             return self.formatList(writer, value, type_info.vector.len, ctx);
         },
-
         else => {
             // TODO: implement this
         },
@@ -336,6 +346,12 @@ fn formatType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Co
     return self.options.palette.types.write(writer, "{s}", @typeName(val));
 }
 
+fn formatFunction(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx.withoutValue());
+
+    return;
+}
+
 fn formatEnum(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
     try self.writeValueType(writer, val, ctx);
 
@@ -360,7 +376,9 @@ fn writeValueType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx
     if (self.options.print_types and !ctx.has_list_parent) {
         const type_name = if (ctx.parent_type) |typ| @typeName(typ) else @typeName(@TypeOf(val));
 
-        try self.options.palette.valueTypes.write(writer, "{s} ", type_name);
+        const fmt: []const u8 = if (ctx.print_value) "{s} " else "{s}";
+
+        try self.options.palette.valueTypes.write(writer, fmt, type_name);
     }
 }
 

@@ -137,6 +137,10 @@ pub fn main() !void {
 
     const tre: SpewError!comptime_int = SpewError.UglyColors;
     try d.print(tre);
+
+    // Functions
+
+    try d.print(greet);
 }
 
 const exampleStruct = struct {
@@ -157,3 +161,7 @@ const SpewError = error{
     BadValues,
     StinkyTypes,
 };
+
+fn greet(who: []u8) !void {
+    std.debug.print("hello {s}", .{who});
+}
