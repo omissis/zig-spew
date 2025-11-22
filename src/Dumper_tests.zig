@@ -256,6 +256,16 @@ test "dump enums" {
     );
 }
 
+test "dump enum literals" {
+    const d, var arena = setup();
+    defer arena.deinit();
+
+    try std.testing.expectEqualStrings(
+        "@Type(.enum_literal) .salut",
+        try d.format(arena.allocator(), .salut),
+    );
+}
+
 fn setup() struct { Dumper.Dumper, std.heap.ArenaAllocator } {
     return .{
         Dumper.Dumper{

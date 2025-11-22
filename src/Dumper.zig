@@ -178,7 +178,7 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
         .type => {
             return self.formatType(writer, value, ctx);
         },
-        .@"enum" => {
+        .@"enum", .enum_literal => {
             return self.formatEnum(writer, value, ctx);
         },
         // TODO: implement all the following types
@@ -194,7 +194,7 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
         .vector => {
             return self.formatList(writer, value, type_info.vector.len, ctx);
         },
-        //.enum_literal
+
         else => {
             // TODO: implement this
         },

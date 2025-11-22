@@ -117,6 +117,8 @@ pub fn main() !void {
 
     try d.print(exampleEnum.ciao);
 
+    try d.print(.salut);
+
     try d.print(@Vector(4, i32){ 1, 2, 3, 4 });
 }
 
