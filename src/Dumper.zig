@@ -213,19 +213,16 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
         .void => {
             return self.formatVoid(writer, value, ctx);
         },
+        .@"union" => {
+            return self.formatUnion(writer, value, ctx);
+        },
         .vector => {
             return self.formatList(writer, value, type_info.vector.len, ctx);
         },
-        //.@"union"
         else => {
             return self.formatUnsupported(writer, value, ctx);
         },
     }
-
-    // std.debug.print("Value {any} has unsupported type: {any}\n", .{ value, type_of });
-    // std.debug.print("Type Info: {any}\n", .{type_info});
-
-    return;
 }
 
 pub fn fmt(self: *const Dumper, value: anytype) Formatter(@TypeOf(value)) {
@@ -393,10 +390,34 @@ fn formatVoid(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Co
     return self.options.palette.empties.write(writer, "{any}", val);
 }
 
+/// All types that are not supported by the dumper will end up here.
+///
+/// Unsupported types are: .frame, .@"anyframe", .noreturn, .@"opaque"
 fn formatUnsupported(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
     try self.writeValueType(writer, val, ctx);
 
     return self.options.palette.empties.write(writer, "[unsupported]", .{});
+}
+
+fn formatUnion(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    try self.writeValueType(writer, val, ctx);
+
+    const type_of = @TypeOf(val);
+    const type_info = @typeInfo(type_of);
+    const fields = std.meta.fieldNames(type_of);
+
+    std.debug.print("VALUE: {any}\n", .{val});
+    std.debug.print("TYPE OF: {any}\n", .{type_of});
+    std.debug.print("TYPE INFO DECLS: {any}\n", .{type_info.@"union".decls});
+    std.debug.print("TYPE INFO FIELDS:\n", .{});
+    inline for (0..type_info.@"union".fields.len) |i| {
+        std.debug.print("  {any}\n", .{type_info.@"union".fields[i]});
+    }
+    std.debug.print("TYPE INFO LAYOUT: {any}\n", .{type_info.@"union".layout});
+    std.debug.print("TYPE INFO TAG TYPE: {any}\n", .{type_info.@"union".tag_type});
+    std.debug.print("FIELDS NAMES: {any}\n", .{fields});
+
+    // return self.options.palette.u.write(writer, "{any}", val);
 }
 
 fn writeValueType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
