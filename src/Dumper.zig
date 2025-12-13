@@ -61,6 +61,17 @@ const Context = struct {
     }
 };
 
+fn Formatter(T: type) type {
+    return struct {
+        value: T,
+        dumper: *const Dumper,
+
+        pub fn format(self: @This(), w: *std.Io.Writer) !void {
+            return self.dumper.write(w, self.value, .{});
+        }
+    };
+}
+
 // Properties
 
 options: Options = .{},
@@ -215,6 +226,13 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
     // std.debug.print("Type Info: {any}\n", .{type_info});
 
     return;
+}
+
+pub fn fmt(self: *const Dumper, value: anytype) Formatter(@TypeOf(value)) {
+    return .{
+        .value = value,
+        .dumper = self,
+    };
 }
 
 fn formatString(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
@@ -383,11 +401,11 @@ fn formatUnsupported(self: *const Dumper, writer: *std.Io.Writer, val: anytype, 
 
 fn writeValueType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
     if (self.options.print_types and !ctx.has_list_parent) {
-        const type_name = if (ctx.parent_type) |typ| @typeName(typ) else @typeName(@TypeOf(val));
+        const f: []const u8 = if (ctx.print_value) "{s} " else "{s}";
 
-        const fmt: []const u8 = if (ctx.print_value) "{s} " else "{s}";
+        const v = if (ctx.parent_type) |typ| @typeName(typ) else @typeName(@TypeOf(val));
 
-        try self.options.palette.valueTypes.write(writer, fmt, type_name);
+        try self.options.palette.valueTypes.write(writer, f, v);
     }
 }
 

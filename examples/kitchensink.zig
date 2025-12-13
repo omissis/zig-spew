@@ -146,6 +146,10 @@ pub fn main() !void {
 
     const v: void = {};
     try d.print(v);
+
+    // Formatters
+
+    std.debug.print("example: {f}\n", .{d.fmt(42)});
 }
 
 const exampleStruct = struct {
