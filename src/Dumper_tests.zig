@@ -324,6 +324,198 @@ test "dump void" {
     );
 }
 
+test "dump bare unions" {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    const d_pretty = Dumper.Dumper{
+        .options = .{
+            .palette = theme.MonochromaticPalette,
+            .unions_pretty_print = true,
+            .unions_print_all_fields = false,
+        },
+    };
+
+    const d_compact = Dumper.Dumper{
+        .options = .{
+            .palette = theme.MonochromaticPalette,
+            .unions_pretty_print = false,
+            .unions_print_all_fields = false,
+        },
+    };
+
+    const d_pretty_all_fields = Dumper.Dumper{
+        .options = .{
+            .palette = theme.MonochromaticPalette,
+            .unions_pretty_print = true,
+            .unions_print_all_fields = true,
+        },
+    };
+
+    const d_compact_all_fields = Dumper.Dumper{
+        .options = .{
+            .palette = theme.MonochromaticPalette,
+            .unions_pretty_print = false,
+            .unions_print_all_fields = true,
+        },
+    };
+
+    const v: exampleUnion = .{ .alpha = 6 };
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleUnion {\n" ++
+            "    [unsupported]\n" ++
+            "}",
+        try d_pretty.format(arena.allocator(), v),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleUnion { [unsupported] }",
+        try d_compact.format(arena.allocator(), v),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleUnion {\n" ++
+            "    alpha: ?i64 6\n" ++
+            "}",
+        try d_pretty.formatOpts(arena.allocator(), v, .{ .field_name = "alpha" }),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleUnion { alpha: ?i64 6 }",
+        try d_compact.formatOpts(arena.allocator(), v, .{ .field_name = "alpha" }),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleUnion {\n" ++
+            "    alpha: [unsupported],\n" ++
+            "    beta: [unsupported],\n" ++
+            "    gamma: [unsupported]\n" ++
+            "}",
+        try d_pretty_all_fields.format(arena.allocator(), v),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleUnion { alpha: [unsupported], beta: [unsupported], gamma: [unsupported] }",
+        try d_compact_all_fields.format(arena.allocator(), v),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleUnion {\n" ++
+            "    alpha: ?i64 6,\n" ++
+            "    beta: @TypeOf(null) null,\n" ++
+            "    gamma: @TypeOf(null) null\n" ++
+            "}",
+        try d_pretty_all_fields.formatOpts(arena.allocator(), v, .{ .field_name = "alpha" }),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleUnion { alpha: ?i64 6, beta: @TypeOf(null) null, gamma: @TypeOf(null) null }",
+        try d_compact_all_fields.formatOpts(arena.allocator(), v, .{ .field_name = "alpha" }),
+    );
+}
+
+test "dump tagged unions" {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    const d_pretty = Dumper.Dumper{
+        .options = .{
+            .palette = theme.MonochromaticPalette,
+            .unions_pretty_print = true,
+            .unions_print_all_fields = false,
+        },
+    };
+
+    const d_compact = Dumper.Dumper{
+        .options = .{
+            .palette = theme.MonochromaticPalette,
+            .unions_pretty_print = false,
+            .unions_print_all_fields = false,
+        },
+    };
+
+    const d_pretty_all_fields = Dumper.Dumper{
+        .options = .{
+            .palette = theme.MonochromaticPalette,
+            .unions_pretty_print = true,
+            .unions_print_all_fields = true,
+        },
+    };
+
+    const d_compact_all_fields = Dumper.Dumper{
+        .options = .{
+            .palette = theme.MonochromaticPalette,
+            .unions_pretty_print = false,
+            .unions_print_all_fields = true,
+        },
+    };
+
+    const v: exampleTaggedUnion = .{ .alpha = 6 };
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleTaggedUnion {\n" ++
+            "    alpha: ?i64 6\n" ++
+            "}",
+        try d_pretty.format(arena.allocator(), v),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleTaggedUnion { alpha: ?i64 6 }",
+        try d_compact.format(arena.allocator(), v),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleTaggedUnion {\n" ++
+            "    alpha: ?i64 6\n" ++
+            "}",
+        try d_pretty.formatOpts(arena.allocator(), v, .{ .field_name = "alpha" }),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleTaggedUnion { alpha: ?i64 6 }",
+        try d_compact.formatOpts(arena.allocator(), v, .{ .field_name = "alpha" }),
+    );
+
+    try std.testing.expectError(
+        Dumper.InvalidPrintOptionError.InactiveFieldNameSelected,
+        d_pretty.formatOpts(arena.allocator(), v, .{ .field_name = "beta" }),
+    );
+
+    try std.testing.expectError(
+        Dumper.InvalidPrintOptionError.InactiveFieldNameSelected,
+        d_compact.formatOpts(arena.allocator(), v, .{ .field_name = "beta" }),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleTaggedUnion {\n" ++
+            "    alpha: ?i64 6,\n" ++
+            "    beta: @TypeOf(null) null,\n" ++
+            "    gamma: @TypeOf(null) null\n" ++
+            "}",
+        try d_pretty_all_fields.format(arena.allocator(), v),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleTaggedUnion { alpha: ?i64 6, beta: @TypeOf(null) null, gamma: @TypeOf(null) null }",
+        try d_compact_all_fields.format(arena.allocator(), v),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleTaggedUnion {\n" ++
+            "    alpha: ?i64 6,\n" ++
+            "    beta: @TypeOf(null) null,\n" ++
+            "    gamma: @TypeOf(null) null\n" ++
+            "}",
+        try d_pretty_all_fields.formatOpts(arena.allocator(), v, .{ .field_name = "alpha" }),
+    );
+
+    try std.testing.expectEqualStrings(
+        "Dumper_tests.exampleTaggedUnion { alpha: ?i64 6, beta: @TypeOf(null) null, gamma: @TypeOf(null) null }",
+        try d_compact_all_fields.formatOpts(arena.allocator(), v, .{ .field_name = "alpha" }),
+    );
+}
+
 fn setup() struct { Dumper.Dumper, std.heap.ArenaAllocator } {
     return .{
         Dumper.Dumper{
@@ -334,6 +526,24 @@ fn setup() struct { Dumper.Dumper, std.heap.ArenaAllocator } {
         std.heap.ArenaAllocator.init(std.heap.page_allocator),
     };
 }
+
+const exampleTag = enum {
+    alpha,
+    beta,
+    gamma,
+};
+
+const exampleTaggedUnion = union(exampleTag) {
+    alpha: i64,
+    beta: f64,
+    gamma: bool,
+};
+
+const exampleUnion = union {
+    alpha: i64,
+    beta: f64,
+    gamma: bool,
+};
 
 const exampleStruct = struct {
     name: []u8,

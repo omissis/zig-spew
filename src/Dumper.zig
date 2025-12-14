@@ -9,7 +9,7 @@ const unsupported = "[unsupported]";
 
 // Errors
 
-const InvalidPrintOptionError = error{
+pub const InvalidPrintOptionError = error{
     InactiveFieldNameSelected, // returned when asking to print an inactive field over a union
 };
 
@@ -105,13 +105,7 @@ options: Options = .{},
 
 /// Pretty-prints the given value to standard output.
 pub fn print(self: *const Dumper, value: anytype) !void {
-    var buf: [1024]u8 = undefined;
-    var writer = std.fs.File.stdout().writer(&buf);
-
-    try self.write(&writer.interface, value, .{});
-    try writer.interface.writeAll("\n");
-
-    try writer.interface.flush();
+    try self.printOpts(value, .{});
 }
 
 /// Pretty-prints the given value to standard output, allowing for ad-hoc options.
@@ -130,12 +124,20 @@ pub fn printOpts(self: *const Dumper, value: anytype, opts: PrintOptions) !void 
 
 /// Pretty-formats the given value and returns it as a slice of u8.
 pub fn format(self: *const Dumper, allocator: std.mem.Allocator, value: anytype) ![]u8 {
+    return self.formatOpts(allocator, value, .{});
+}
+
+/// Pretty-formats the given value and returns it as a slice of u8, allowing for ad-hoc options.
+///
+/// This is mostly used for corner cases such as passing a field name for untagged structs,
+/// as they otherwise would be unprintable.
+pub fn formatOpts(self: *const Dumper, allocator: std.mem.Allocator, value: anytype, opts: PrintOptions) ![]u8 {
     var allocating = std.Io.Writer.Allocating.init(allocator);
     defer allocating.deinit();
 
     const writer = &allocating.writer;
 
-    try self.write(writer, value, .{});
+    try self.write(writer, value, .{ .print_options = opts });
     try writer.flush();
 
     return allocating.toOwnedSlice();
@@ -475,33 +477,34 @@ fn formatUnion(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: C
 
     try self.writeValueType(writer, val, ctx);
 
-    // handle untagged unions, with no specified field_name and no option to print all fields
-    if (!self.options.unions_print_all_fields and (field_name == null or field_name.?.len == 0)) {
-        _ = try writer.print("{{ {s} }}\n", .{unsupported});
-
-        return;
-    }
-
     _ = try writer.print("{{{s}", .{eol});
 
-    inline for (type_info.@"union".fields, 0..) |field, i| {
-        const is_field_active = if (field_name) |fname| std.mem.eql(u8, field.name, fname) else false;
+    if (!self.options.unions_print_all_fields and (field_name == null or field_name.?.len == 0)) {
+        // handle untagged unions, with no specified field_name and no option to print all fields
 
-        if (self.options.unions_print_all_fields or is_field_active) {
-            const field_value = if (is_field_active) @field(val, field.name) else null;
-            const sep = if (self.options.unions_print_all_fields and i < fields.len - 1) "," else "";
+        try self.indent(writer, ctx.cur_depth + 1, self.options.unions_pretty_print);
 
-            try self.indent(writer, ctx.cur_depth + 1, self.options.unions_pretty_print);
+        _ = try writer.print("{s}{s}", .{ unsupported, eol });
+    } else {
+        inline for (type_info.@"union".fields, 0..) |field, i| {
+            const is_field_active = if (field_name) |fname| std.mem.eql(u8, field.name, fname) else false;
 
-            _ = try writer.print("{s}: ", .{field.name});
+            if (self.options.unions_print_all_fields or is_field_active) {
+                const field_value = if (is_field_active) @field(val, field.name) else null;
+                const sep = if (self.options.unions_print_all_fields and i < fields.len - 1) "," else "";
 
-            if (field_name != null) {
-                _ = try self.write(writer, field_value, ctx.incDepth());
-            } else {
-                _ = try self.write(writer, unsupported, ctx.incDepth());
+                try self.indent(writer, ctx.cur_depth + 1, self.options.unions_pretty_print);
+
+                _ = try writer.print("{s}: ", .{field.name});
+
+                if (field_name != null) {
+                    _ = try self.write(writer, field_value, ctx.incDepth());
+                } else {
+                    _ = try writer.print("{s}", .{unsupported});
+                }
+
+                _ = try writer.print("{s}{s}", .{ sep, eol });
             }
-
-            _ = try writer.print("{s}{s}", .{ sep, eol });
         }
     }
 
