@@ -357,7 +357,7 @@ fn formatList(self: *const Dumper, writer: *std.Io.Writer, val: anytype, len: us
         try self.write(writer, val[i], ctx.incDepth().withListParent());
 
         if (i != len - 1) {
-            _ = try writer.write(", ");
+            _ = try writer.writeAll(", ");
         }
     }
 
@@ -371,7 +371,7 @@ fn formatStruct(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: 
     if (ctx.cur_depth >= self.options.max_depth) {
         std.debug.print("Max depth({d}) reached, skipping dump.\n", .{self.options.max_depth});
 
-        _ = try writer.write("{...}");
+        _ = try writer.writeAll("{...}");
 
         return;
     }
