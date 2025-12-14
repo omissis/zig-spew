@@ -147,6 +147,18 @@ pub fn main() !void {
     const v: void = {};
     try d.print(v);
 
+    // Unions
+
+    try d.print(exampleUnion{ .alpha = 6 });
+
+    try d.print(exampleTaggedUnion{ .beta = 7 });
+
+    const d4 = spew.Dumper{ .options = .{ .unions_print_all_fields = true } };
+
+    try d4.print(exampleUnion{ .alpha = 6 });
+
+    try d4.print(exampleTaggedUnion{ .beta = 7 });
+
     // Formatters
 
     std.debug.print("example: {f}\n", .{d.fmt(42)});
@@ -174,3 +186,17 @@ const SpewError = error{
 fn greet(who: []u8) !void {
     std.debug.print("hello {s}", .{who});
 }
+
+const exampleUnion = union {
+    alpha: i64,
+    beta: f64,
+    gamma: bool,
+};
+
+const exampleTag = enum { alpha, beta, gamma };
+
+const exampleTaggedUnion = union(exampleTag) {
+    alpha: i64,
+    beta: f64,
+    gamma: bool,
+};

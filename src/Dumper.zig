@@ -3,6 +3,16 @@
 const std = @import("std");
 const theme = @import("theme.zig");
 
+// Consts
+
+const unsupported = "[unsupported]";
+
+// Errors
+
+pub const InvalidPrintOptionError = error{
+    InactiveFieldNameSelected, // returned when asking to print an inactive field over a union
+};
+
 // Types
 
 pub const Dumper = @This();
@@ -20,13 +30,20 @@ pub const Options = struct {
     bytes_interpretation: bool = true, // whether to interpret u8 as bytes instead of decimals
     bytes_representation: theme.BytesRepresentation = .hex, // wheter to represent bytes as decimals or hexadecimals
     structs_pretty_print: bool = true, // whether to print structs with newlines and indentation or not
+    unions_pretty_print: bool = true, // whether to print unions with newlines and indentation or not
+    unions_print_all_fields: bool = false, // whether to print all the fields or only the active one
+};
+
+pub const PrintOptions = struct {
+    field_name: ?[]const u8 = null,
 };
 
 const Context = struct {
     cur_depth: u16 = 0,
     has_list_parent: bool = false, // whether the parent is a list type
-    parent_type: ?type = null,
+    parent_type_name: ?[]const u8 = null,
     print_value: bool = true,
+    print_options: ?PrintOptions = null,
 
     pub fn incDepth(self: Context) Context {
         var new = self;
@@ -39,7 +56,7 @@ const Context = struct {
     pub fn withParentType(self: Context, typ: type) Context {
         var new = self;
 
-        new.parent_type = typ;
+        new.parent_type_name = @typeName(typ);
 
         return new;
     }
@@ -56,6 +73,14 @@ const Context = struct {
         var new = self;
 
         new.print_value = false;
+
+        return new;
+    }
+
+    pub fn withPrintOptions(self: Context, opts: PrintOptions) Context {
+        var new = self;
+
+        new.print_options = opts;
 
         return new;
     }
@@ -78,28 +103,47 @@ options: Options = .{},
 
 // Dumper's own functions
 
+/// Pretty-prints the given value to standard output.
 pub fn print(self: *const Dumper, value: anytype) !void {
+    try self.printOpts(value, .{});
+}
+
+/// Pretty-prints the given value to standard output, allowing for ad-hoc options.
+///
+/// This is mostly used for corner cases such as passing a field name for untagged structs,
+/// as they otherwise would be unprintable.
+pub fn printOpts(self: *const Dumper, value: anytype, opts: PrintOptions) !void {
     var buf: [1024]u8 = undefined;
     var writer = std.fs.File.stdout().writer(&buf);
 
-    try self.write(&writer.interface, value, .{});
+    try self.write(&writer.interface, value, .{ .print_options = opts });
     try writer.interface.writeAll("\n");
 
     try writer.interface.flush();
 }
 
+/// Pretty-formats the given value and returns it as a slice of u8.
 pub fn format(self: *const Dumper, allocator: std.mem.Allocator, value: anytype) ![]u8 {
+    return self.formatOpts(allocator, value, .{});
+}
+
+/// Pretty-formats the given value and returns it as a slice of u8, allowing for ad-hoc options.
+///
+/// This is mostly used for corner cases such as passing a field name for untagged structs,
+/// as they otherwise would be unprintable.
+pub fn formatOpts(self: *const Dumper, allocator: std.mem.Allocator, value: anytype, opts: PrintOptions) ![]u8 {
     var allocating = std.Io.Writer.Allocating.init(allocator);
     defer allocating.deinit();
 
     const writer = &allocating.writer;
 
-    try self.write(writer, value, .{});
+    try self.write(writer, value, .{ .print_options = opts });
     try writer.flush();
 
     return allocating.toOwnedSlice();
 }
 
+// Pretty-writes the given value to the given writer.
 pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: Context) !void {
     const type_of = @TypeOf(value);
     const type_info = @typeInfo(type_of);
@@ -149,6 +193,14 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
             // std.debug.print("PTR: {any}\n", .{type_info.pointer});
             // std.debug.print("CHILD_TYPE_INFO: {any}\n", .{child_type_info});
 
+            switch (child_type_info) {
+                .@"opaque" => {
+                    // TODO: implement thi
+                    return;
+                },
+                else => {},
+            }
+            // TODO: check std.zig.fmtString()
             switch (type_info.pointer.size) {
                 .one => {
                     switch (child_type_info) {
@@ -213,21 +265,33 @@ pub fn write(self: *const Dumper, writer: *std.Io.Writer, value: anytype, ctx: C
         .void => {
             return self.formatVoid(writer, value, ctx);
         },
+        .@"union" => {
+            if (type_info.@"union".tag_type) |_| {
+                if (ctx.print_options) |opts| {
+                    if (opts.field_name) |fname| {
+                        if (!std.mem.eql(u8, fname, @tagName(value))) {
+                            return InvalidPrintOptionError.InactiveFieldNameSelected;
+                        }
+                    }
+                }
+
+                return self.formatUnion(writer, value, ctx.withPrintOptions(
+                    .{ .field_name = @tagName(value) },
+                ));
+            }
+
+            return self.formatUnion(writer, value, ctx);
+        },
         .vector => {
             return self.formatList(writer, value, type_info.vector.len, ctx);
         },
-        //.@"union"
         else => {
             return self.formatUnsupported(writer, value, ctx);
         },
     }
-
-    // std.debug.print("Value {any} has unsupported type: {any}\n", .{ value, type_of });
-    // std.debug.print("Type Info: {any}\n", .{type_info});
-
-    return;
 }
 
+/// Returns a formatter value that allows to integrate zig-spew with standard print functions.
 pub fn fmt(self: *const Dumper, value: anytype) Formatter(@TypeOf(value)) {
     return .{
         .value = value,
@@ -361,6 +425,7 @@ fn formatType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Co
     return self.options.palette.types.write(writer, "{s}", @typeName(val));
 }
 
+// TODO: implement custom type printing for this (esp for return types and error_set)
 fn formatFunction(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
     try self.writeValueType(writer, val, ctx.withoutValue());
 
@@ -379,6 +444,7 @@ fn formatErrorSet(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx
     return self.options.palette.errors.write(writer, "{any}", val);
 }
 
+// TODO: resolve the error union to have pretty-printable data
 fn formatErrorUnion(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
     if (val) |in_val| {
         return self.write(writer, in_val, ctx);
@@ -393,19 +459,69 @@ fn formatVoid(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Co
     return self.options.palette.empties.write(writer, "{any}", val);
 }
 
+/// All types that are not supported by the dumper will end up here.
+///
+/// Unsupported types are: .frame, .@"anyframe", .noreturn, .@"opaque"
 fn formatUnsupported(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
     try self.writeValueType(writer, val, ctx);
 
-    return self.options.palette.empties.write(writer, "[unsupported]", .{});
+    return self.options.palette.empties.write(writer, unsupported, .{});
+}
+
+fn formatUnion(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
+    const type_of = @TypeOf(val);
+    const type_info = @typeInfo(type_of);
+    const fields = std.meta.fieldNames(type_of);
+    const field_name = if (ctx.print_options) |opts| opts.field_name else null;
+    const eol = if (self.options.unions_pretty_print) "\n" else " ";
+
+    try self.writeValueType(writer, val, ctx);
+
+    _ = try writer.print("{{{s}", .{eol});
+
+    if (!self.options.unions_print_all_fields and (field_name == null or field_name.?.len == 0)) {
+        // handle untagged unions, with no specified field_name and no option to print all fields
+
+        try self.indent(writer, ctx.cur_depth + 1, self.options.unions_pretty_print);
+
+        _ = try writer.print("{s}{s}", .{ unsupported, eol });
+    } else {
+        inline for (type_info.@"union".fields, 0..) |field, i| {
+            const is_field_active = if (field_name) |fname| std.mem.eql(u8, field.name, fname) else false;
+
+            if (self.options.unions_print_all_fields or is_field_active) {
+                const field_value = if (is_field_active) @field(val, field.name) else null;
+                const sep = if (self.options.unions_print_all_fields and i < fields.len - 1) "," else "";
+
+                try self.indent(writer, ctx.cur_depth + 1, self.options.unions_pretty_print);
+
+                _ = try writer.print("{s}: ", .{field.name});
+
+                if (field_name != null) {
+                    _ = try self.write(writer, field_value, ctx.incDepth());
+                } else {
+                    _ = try writer.print("{s}", .{unsupported});
+                }
+
+                _ = try writer.print("{s}{s}", .{ sep, eol });
+            }
+        }
+    }
+
+    try self.indent(writer, ctx.cur_depth, self.options.unions_pretty_print);
+
+    _ = try writer.print("}}", .{});
 }
 
 fn writeValueType(self: *const Dumper, writer: *std.Io.Writer, val: anytype, ctx: Context) !void {
     if (self.options.print_types and !ctx.has_list_parent) {
-        const f: []const u8 = if (ctx.print_value) "{s} " else "{s}";
+        const v = if (ctx.parent_type_name) |ptn| ptn else @typeName(@TypeOf(val));
 
-        const v = if (ctx.parent_type) |typ| @typeName(typ) else @typeName(@TypeOf(val));
+        try self.options.palette.valueTypes.write(writer, "{s}", v);
 
-        try self.options.palette.valueTypes.write(writer, f, v);
+        if (ctx.print_value) {
+            _ = try writer.print(" ", .{});
+        }
     }
 }
 
@@ -425,4 +541,21 @@ fn indent(self: *const Dumper, writer: *std.Io.Writer, depth: u16, pretty: bool)
     _ = try writer.splatByte(self.options.indent_char, self.options.indent_size * depth);
 
     return;
+}
+
+fn debugUnion(val: anytype) void {
+    const type_of = @TypeOf(val);
+    const type_info = @typeInfo(type_of);
+    const fields = std.meta.fieldNames(type_of);
+
+    std.debug.print("VALUE: {any}\n", .{val});
+    std.debug.print("TYPE OF: {any}\n", .{type_of});
+    std.debug.print("TYPE INFO DECLS: {any}\n", .{type_info.@"union".decls});
+    std.debug.print("TYPE INFO FIELDS:\n", .{});
+    inline for (0..type_info.@"union".fields.len) |i| {
+        std.debug.print("  {any}\n", .{type_info.@"union".fields[i]});
+    }
+    std.debug.print("TYPE INFO LAYOUT: {any}\n", .{type_info.@"union".layout});
+    std.debug.print("TYPE INFO TAG TYPE: {any}\n", .{type_info.@"union".tag_type});
+    std.debug.print("FIELDS NAMES: {any}\n", .{fields});
 }
